@@ -13,6 +13,12 @@ export default function ConfigClient({ initialConfig }: Props) {
   const [config, setConfig] = useState<AppConfig>(initialConfig);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const providerLabel = config.aiProvider === "deepseek" ? "DeepSeek" : "OpenAI";
+  const showOpenAIFields = config.aiProvider !== "gemini";
+  const openaiBase = "https://api.openai.com/v1";
+  const deepseekBase = "https://api.deepseek.com/v1";
+  const defaultOpenaiModel = "gpt-4o-mini";
+  const defaultDeepseekModel = "deepseek-chat";
 
   const updateField = (key: keyof AppConfig, value: string) => {
     if (key === "aiEnabled" || key === "aiAutoSave") {
@@ -25,6 +31,31 @@ export default function ConfigClient({ initialConfig }: Props) {
       return;
     }
     setConfig((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const updateProvider = (value: AppConfig["aiProvider"]) => {
+    setConfig((prev) => {
+      const next = { ...prev, aiProvider: value };
+      if (value === "deepseek") {
+        if (!prev.aiBaseUrl || prev.aiBaseUrl === openaiBase) {
+          next.aiBaseUrl = deepseekBase;
+        }
+        if (!prev.aiModel || prev.aiModel === defaultOpenaiModel) {
+          next.aiModel = defaultDeepseekModel;
+        }
+        return next;
+      }
+      if (value === "openai") {
+        if (!prev.aiBaseUrl || prev.aiBaseUrl === deepseekBase) {
+          next.aiBaseUrl = openaiBase;
+        }
+        if (!prev.aiModel || prev.aiModel === defaultDeepseekModel) {
+          next.aiModel = defaultOpenaiModel;
+        }
+        return next;
+      }
+      return next;
+    });
   };
 
   const saveConfig = async () => {
@@ -132,10 +163,11 @@ export default function ConfigClient({ initialConfig }: Props) {
           <select
             value={config.aiProvider}
             onChange={(event) =>
-              updateField("aiProvider", event.target.value as AppConfig["aiProvider"])
+              updateProvider(event.target.value as AppConfig["aiProvider"])
             }
           >
             <option value="openai">openai</option>
+            <option value="deepseek">deepseek</option>
             <option value="gemini">gemini</option>
           </select>
         </div>
@@ -155,52 +187,62 @@ export default function ConfigClient({ initialConfig }: Props) {
             <option value="Low">Low</option>
           </select>
         </div>
-        <div className={styles.formRow}>
-          <label>OpenAI 输出</label>
-          <select
-            value={config.openaiOutputFormat}
-            onChange={(event) =>
-              updateField(
-                "openaiOutputFormat",
-                event.target.value as AppConfig["openaiOutputFormat"]
-              )
-            }
-          >
-            <option value="function_calling">function_calling</option>
-            <option value="json_object">json_object</option>
-            <option value="structured_output">structured_output</option>
-            <option value="text">text</option>
-          </select>
-        </div>
-        <div className={styles.formRow}>
-          <label>OpenAI Key</label>
-          <input
-            value={config.aiApiKey}
-            onChange={(event) => updateField("aiApiKey", event.target.value)}
-          />
-        </div>
-        <div className={styles.formRow}>
-          <label>OpenAI Base</label>
-          <input
-            value={config.aiBaseUrl}
-            onChange={(event) => updateField("aiBaseUrl", event.target.value)}
-          />
-        </div>
-        <div className={styles.formRow}>
-          <label>OpenAI 模型</label>
-          <input
-            value={config.aiModel}
-            onChange={(event) => updateField("aiModel", event.target.value)}
-          />
-        </div>
-        <div className={styles.formRow}>
-          <label>OpenAI 温度</label>
-          <input
-            type="number"
-            value={config.aiTemperature}
-            onChange={(event) => updateField("aiTemperature", event.target.value)}
-          />
-        </div>
+        {showOpenAIFields ? (
+          <div className={styles.formRow}>
+            <label>输出格式</label>
+            <select
+              value={config.openaiOutputFormat}
+              onChange={(event) =>
+                updateField(
+                  "openaiOutputFormat",
+                  event.target.value as AppConfig["openaiOutputFormat"]
+                )
+              }
+            >
+              <option value="function_calling">function_calling</option>
+              <option value="json_object">json_object</option>
+              <option value="structured_output">structured_output</option>
+              <option value="text">text</option>
+            </select>
+          </div>
+        ) : null}
+        {showOpenAIFields ? (
+          <div className={styles.formRow}>
+            <label>{providerLabel} Key</label>
+            <input
+              value={config.aiApiKey}
+              onChange={(event) => updateField("aiApiKey", event.target.value)}
+            />
+          </div>
+        ) : null}
+        {showOpenAIFields ? (
+          <div className={styles.formRow}>
+            <label>{providerLabel} Base</label>
+            <input
+              value={config.aiBaseUrl}
+              onChange={(event) => updateField("aiBaseUrl", event.target.value)}
+            />
+          </div>
+        ) : null}
+        {showOpenAIFields ? (
+          <div className={styles.formRow}>
+            <label>{providerLabel} 模型</label>
+            <input
+              value={config.aiModel}
+              onChange={(event) => updateField("aiModel", event.target.value)}
+            />
+          </div>
+        ) : null}
+        {showOpenAIFields ? (
+          <div className={styles.formRow}>
+            <label>{providerLabel} 温度</label>
+            <input
+              type="number"
+              value={config.aiTemperature}
+              onChange={(event) => updateField("aiTemperature", event.target.value)}
+            />
+          </div>
+        ) : null}
         <div className={styles.formRow}>
           <label>Gemini Key</label>
           <input

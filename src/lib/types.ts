@@ -1,6 +1,6 @@
 export type RenameMode = "链接" | "复制" | "剪切";
 
-export type AiProvider = "openai" | "gemini";
+export type AiProvider = "openai" | "gemini" | "deepseek";
 
 export type AiConfidence = "High" | "Medium" | "Low";
 

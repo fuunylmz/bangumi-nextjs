@@ -170,7 +170,7 @@ export const runAiAnalysis = async (
   folders: string[]
 ): Promise<AiRawResult | null> => {
   if (!config.aiEnabled) return null;
-  if (config.aiProvider === "openai") {
+  if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
     if (!config.aiApiKey) return null;
     const raw = await requestOpenAI(config, buildPrompt(title, files, folders));
     return { raw, extractedJson: extractFromOpenAIResponse(raw) };
@@ -187,7 +187,7 @@ export const runAiTitleAnalysis = async (
   folders: string[]
 ): Promise<AiRawResult | null> => {
   if (!config.aiEnabled) return null;
-  if (config.aiProvider === "openai") {
+  if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
     if (!config.aiApiKey) return null;
     const raw = await requestOpenAI(config, buildTitlePrompt(title, files, folders));
     return { raw, extractedJson: extractFromOpenAIResponse(raw) };
