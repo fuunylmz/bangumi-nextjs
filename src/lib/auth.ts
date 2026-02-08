@@ -17,3 +17,13 @@ export const validateAuth = (
   if (!cookieValue) return false;
   return cookieValue === hashPassword(config.authPassword);
 };
+
+export const validateQbToken = (
+  config: AppConfig,
+  token?: string | null
+) => {
+  if (!isAuthEnabled(config)) return true;
+  if (!config.qbToken) return false;
+  if (!token) return false;
+  return token === config.qbToken;
+};

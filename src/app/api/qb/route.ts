@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processPath } from "@/lib/rename/process";
 import { readConfig } from "@/lib/storage";
-import { authCookieName, validateAuth } from "@/lib/auth";
+import { authCookieName, validateAuth, validateQbToken } from "@/lib/auth";
 
 const parseLooseJson = (text: string) => {
   try {
@@ -37,6 +37,7 @@ const parseBody = async (request: NextRequest) => {
       path?: string;
       isAnime?: boolean | null | string;
       isMovie?: boolean | null | string;
+      token?: string;
     };
   }
   const params = new URLSearchParams(text);
@@ -46,6 +47,7 @@ const parseBody = async (request: NextRequest) => {
     path: fallback || undefined,
     isAnime: params.get("isAnime") ?? undefined,
     isMovie: params.get("isMovie") ?? undefined,
+    token: params.get("token") ?? undefined,
   };
 };
 
@@ -58,12 +60,26 @@ const normalizeBool = (value?: string | boolean | null) => {
   return null;
 };
 
+const resolveToken = (request: NextRequest, bodyToken?: string | null) => {
+  const header =
+    request.headers.get("x-api-key") ?? request.headers.get("authorization");
+  const headerToken = header?.startsWith("Bearer ")
+    ? header.slice(7).trim()
+    : header?.trim();
+  const urlToken = new URL(request.url).searchParams.get("token")?.trim();
+  return bodyToken?.trim() || headerToken || urlToken || null;
+};
+
 export const POST = async (request: NextRequest) => {
   const config = await readConfig();
-  if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
+  const body = await parseBody(request);
+  const token = resolveToken(request, body.token);
+  const cookieValue = request.cookies.get(authCookieName)?.value ?? null;
+  const authed =
+    validateAuth(config, cookieValue) || validateQbToken(config, token);
+  if (!authed) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
-  const body = await parseBody(request);
   const path = (body.path ?? "").toString().trim();
   if (!path) {
     return NextResponse.json({ error: "路径不能为空" }, { status: 400 });
@@ -80,7 +96,11 @@ export const POST = async (request: NextRequest) => {
 
 export const GET = async (request: NextRequest) => {
   const config = await readConfig();
-  if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
+  const token = resolveToken(request);
+  const cookieValue = request.cookies.get(authCookieName)?.value ?? null;
+  const authed =
+    validateAuth(config, cookieValue) || validateQbToken(config, token);
+  if (!authed) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
   const url = new URL(request.url);

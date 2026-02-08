@@ -19,6 +19,7 @@ export type AppConfig = {
   mode: RenameMode;
   authEnabled: boolean;
   authPassword: string;
+  qbToken: string;
   aiEnabled: boolean;
   aiAutoSave: boolean;
   aiProvider: AiProvider;

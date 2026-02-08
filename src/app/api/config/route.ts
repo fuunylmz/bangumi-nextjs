@@ -8,7 +8,7 @@ export const GET = async (request: NextRequest) => {
   if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
-  return NextResponse.json({ ...config, authPassword: "" });
+  return NextResponse.json({ ...config, authPassword: "", qbToken: "" });
 };
 
 export const POST = async (request: NextRequest) => {
@@ -26,6 +26,7 @@ export const POST = async (request: NextRequest) => {
     mode: body.mode || "链接",
     authEnabled: Boolean(body.authEnabled),
     authPassword: body.authPassword || current.authPassword || "",
+    qbToken: body.qbToken || current.qbToken || "",
     aiEnabled: Boolean(body.aiEnabled),
     aiAutoSave: Boolean(body.aiAutoSave),
     aiProvider: body.aiProvider || "openai",

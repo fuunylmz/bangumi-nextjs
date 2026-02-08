@@ -12,7 +12,7 @@ export default async function ConfigPage() {
   }
   return (
     <ConfigClient
-      initialConfig={{ ...config, authPassword: "" }}
+      initialConfig={{ ...config, authPassword: "", qbToken: "" }}
     />
   );
 }

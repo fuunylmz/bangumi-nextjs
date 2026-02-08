@@ -145,6 +145,15 @@ export default function ConfigClient({ initialConfig }: Props) {
           />
         </div>
         <div className={styles.formRow}>
+          <label>回调 Token</label>
+          <input
+            type="password"
+            value={config.qbToken}
+            placeholder="qBittorrent 回调用，留空表示不修改"
+            onChange={(event) => updateField("qbToken", event.target.value)}
+          />
+        </div>
+        <div className={styles.formRow}>
           <label>模式</label>
           <select
             value={config.mode}

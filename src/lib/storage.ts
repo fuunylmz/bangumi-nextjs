@@ -17,6 +17,7 @@ const defaultConfig: AppConfig = {
   mode: "链接",
   authEnabled: false,
   authPassword: "",
+  qbToken: "",
   aiEnabled: false,
   aiAutoSave: false,
   aiProvider: "openai",
@@ -47,6 +48,7 @@ export const readConfig = async (): Promise<AppConfig> => {
     const merged: AppConfig = { ...defaultConfig, ...parsed } as AppConfig;
     merged.authEnabled = Boolean(merged.authEnabled);
     merged.authPassword = merged.authPassword || "";
+    merged.qbToken = merged.qbToken || "";
     merged.aiEnabled = Boolean(merged.aiEnabled);
     merged.aiAutoSave = Boolean(merged.aiAutoSave);
     merged.aiTemperature = Number(merged.aiTemperature) || defaultConfig.aiTemperature;
