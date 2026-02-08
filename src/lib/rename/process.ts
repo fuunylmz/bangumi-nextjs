@@ -171,7 +171,7 @@ const mapTransfers = async (
     const episode =
       aiItem?.episode ?? extractEpisode(fileName) ?? 0;
     if (episode <= 0 || episode > 999 || !Number.isFinite(episode)) continue;
-    const seasonLabel = padNumber(finalSeason);
+    const seasonLabel = padNumber(extra ? 0 : finalSeason);
     const episodeLabel = padNumber(episode);
     const ext = path.extname(fileName);
     const folder = extra
