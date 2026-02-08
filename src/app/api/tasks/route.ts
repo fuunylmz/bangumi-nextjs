@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readTaskRecords } from "@/lib/storage";
+import { appendTaskLog, readTaskRecords, writeTaskRecord } from "@/lib/storage";
+import { randomUUID } from "node:crypto";
 import { processPath } from "@/lib/rename/process";
 
 export const GET = async () => {
@@ -13,12 +14,30 @@ export const POST = async (request: NextRequest) => {
     isAnime?: boolean | null;
     isMovie?: boolean | null;
   };
-  const result = await processPath(body.path || "", {
+  const uuid = randomUUID();
+  const payload = {
+    path: body.path || "",
     isAnime: body.isAnime ?? null,
     isMovie: body.isMovie ?? null,
+  };
+  void processPath(
+    payload.path,
+    {
+      isAnime: body.isAnime ?? null,
+      isMovie: body.isMovie ?? null,
+    },
+    uuid
+  ).catch(async (error) => {
+    await appendTaskLog(uuid, `[失败] ${(error as Error).message}`);
+    await writeTaskRecord({
+      uuid,
+      path: payload.path,
+      createdAt: new Date().toISOString(),
+      status: "失败",
+      progress: 100,
+      stage: "处理异常",
+      error: (error as Error).message,
+    });
   });
-  if ("error" in result && result.error) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
-  }
-  return NextResponse.json(result);
+  return NextResponse.json({ uuid });
 };

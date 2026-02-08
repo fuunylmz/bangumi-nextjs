@@ -45,4 +45,7 @@ export type TaskRecord = {
   useAi?: boolean;
   tmdbId?: number;
   tmdbType?: "tv" | "movie";
+  status?: "处理中" | "完成" | "失败";
+  progress?: number;
+  stage?: string;
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./page.module.css";
@@ -63,6 +63,15 @@ export default function TaskClient({ initialTasks }: Props) {
     setTasks(data);
   };
 
+  useEffect(() => {
+    const hasRunning = tasks.some((task) => task.status === "处理中");
+    if (!hasRunning) return;
+    const timer = setInterval(() => {
+      void loadTasks();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [tasks]);
+
   const loadBrowse = async (targetPath?: string, page = 1) => {
     setBrowseLoading(true);
     const queryParams = new URLSearchParams();
@@ -111,7 +120,7 @@ export default function TaskClient({ initialTasks }: Props) {
       setMessage(data?.error || "提交失败");
       return;
     }
-    setMessage("任务已提交");
+    setMessage("任务已提交，处理中...");
     setPath("");
     await loadTasks();
   };
@@ -282,6 +291,7 @@ export default function TaskClient({ initialTasks }: Props) {
               <span>季</span>
               <span>类型</span>
               <span>状态</span>
+              <span>进度</span>
               <span>操作</span>
             </div>
             {tasks.length === 0 ? (
@@ -305,7 +315,34 @@ export default function TaskClient({ initialTasks }: Props) {
                       ? "动画"
                       : "剧集"}
                   </span>
-                  <span>{task.error ? "失败" : "完成"}</span>
+                  <span>
+                    {task.status ||
+                      (task.error ? "失败" : "完成")}
+                  </span>
+                  <span className={styles.progressCell}>
+                    <span className={styles.progressLabel}>
+                      {Math.min(
+                        100,
+                        Math.max(0, task.progress ?? (task.status === "处理中" ? 5 : 100))
+                      )}
+                      %
+                    </span>
+                    <span className={styles.progressBar}>
+                      <span
+                        className={styles.progressFill}
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(0, task.progress ?? (task.status === "处理中" ? 5 : 100))
+                          )}%`,
+                        }}
+                        title={task.stage || ""}
+                      />
+                    </span>
+                    {task.stage ? (
+                      <span className={styles.progressStage}>{task.stage}</span>
+                    ) : null}
+                  </span>
                   <span className={styles.rowActions}>
                     <button type="button" onClick={() => retryTask(task)}>
                       重试

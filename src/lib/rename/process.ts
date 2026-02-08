@@ -251,21 +251,55 @@ const decideType = async (
   return { kind: "movie" as const, tv, movie, seasonFromName };
 };
 
-export const processPath = async (inputPath: string, options: ProcessOptions) => {
+export const processPath = async (
+  inputPath: string,
+  options: ProcessOptions,
+  taskUuid?: string
+) => {
   const config = await readConfig();
-  if (!config.apiKey) {
-    return { error: "TMDB API Key 未配置" };
-  }
   const resolvedPath = inputPath.trim();
+  const uuid = taskUuid ?? randomUUID();
+  const record: TaskRecord = {
+    uuid,
+    path: resolvedPath,
+    createdAt: new Date().toISOString(),
+    useAi: config.aiEnabled,
+    status: "处理中",
+    progress: 0,
+    stage: "初始化",
+  };
+  await writeTaskRecord(record);
+  await appendTaskLog(uuid, `[开始] ${resolvedPath}`);
+  if (!config.apiKey) {
+    record.error = "TMDB API Key 未配置";
+    record.status = "失败";
+    record.progress = 100;
+    record.stage = "配置";
+    await appendTaskLog(uuid, "[失败] TMDB API Key 未配置");
+    await writeTaskRecord(record);
+    return record;
+  }
   if (!resolvedPath) {
-    return { error: "路径为空" };
+    record.error = "路径为空";
+    record.status = "失败";
+    record.progress = 100;
+    record.stage = "路径";
+    await appendTaskLog(uuid, "[失败] 路径为空");
+    await writeTaskRecord(record);
+    return record;
   }
   const exists = await fs
     .stat(resolvedPath)
     .then(() => true)
     .catch(() => false);
   if (!exists) {
-    return { error: "路径不存在" };
+    record.error = "路径不存在";
+    record.status = "失败";
+    record.progress = 100;
+    record.stage = "路径";
+    await appendTaskLog(uuid, "[失败] 路径不存在");
+    await writeTaskRecord(record);
+    return record;
   }
 
   const stats = await fs.stat(resolvedPath);
@@ -282,15 +316,6 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
   const fileCount = stats.isDirectory()
     ? (await fs.readdir(resolvedPath)).length
     : 1;
-
-  const uuid = randomUUID();
-  const record: TaskRecord = {
-    uuid,
-    path: resolvedPath,
-    createdAt: new Date().toISOString(),
-    useAi: config.aiEnabled,
-  };
-  await appendTaskLog(uuid, `[开始] ${resolvedPath}`);
   let videoEntries:
     | Awaited<ReturnType<typeof collectVideoEntries>>
     | null = null;
@@ -309,6 +334,9 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
       titleCollectError = (error as Error).message;
     }
   }
+  record.stage = "解析标题";
+  record.progress = 10;
+  await writeTaskRecord(record);
   if (config.aiEnabled) {
     try {
       if (titleCollectError) {
@@ -345,6 +373,9 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
     }
   }
   await appendTaskLog(uuid, `[搜索] 关键词: ${baseName}`);
+  record.stage = "TMDB搜索";
+  record.progress = 25;
+  await writeTaskRecord(record);
 
   const decision = await decideType(
     baseName,
@@ -358,6 +389,9 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
   let aiApplied = 0;
   if (config.aiEnabled) {
     try {
+      record.stage = "AI分集映射";
+      record.progress = 40;
+      await writeTaskRecord(record);
       if (!videoEntries) {
         videoEntries = await collectVideoEntries(resolvedPath);
         videoNames = videoEntries.map((entry) => entry.rel);
@@ -394,6 +428,9 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
     const movie = decision.movie;
     if (!movie) {
       record.error = "未搜索到电影信息";
+      record.status = "失败";
+      record.stage = "TMDB搜索";
+      record.progress = 100;
       await appendTaskLog(uuid, "[失败] 未搜索到电影信息");
       await writeTaskRecord(record);
       return record;
@@ -417,10 +454,16 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
     );
     if (mapping.size === 0) {
       record.error = "未找到可处理的视频文件";
+      record.status = "失败";
+      record.stage = "文件映射";
+      record.progress = 100;
       await appendTaskLog(uuid, "[失败] 未找到可处理的视频文件");
       await writeTaskRecord(record);
       return record;
     }
+    record.stage = "文件移动";
+    record.progress = 70;
+    await writeTaskRecord(record);
     await executeTransfers(mapping, config.mode);
     record.name = name;
     record.isMovie = true;
@@ -428,6 +471,9 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
     record.seasonId = 0;
     record.tmdbId = movie.id;
     record.tmdbType = "movie";
+    record.stage = "记录写入";
+    record.progress = 85;
+    await writeTaskRecord(record);
     await writeTaskRecord(record);
     await fs.writeFile(
       path.join(getRecordsDir(), `${uuid}.json`),
@@ -435,12 +481,19 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
       "utf-8"
     );
     await appendTaskLog(uuid, "[完成] 电影处理完成");
+    record.status = "完成";
+    record.stage = "完成";
+    record.progress = 100;
+    await writeTaskRecord(record);
     return record;
   }
 
   const tv = decision.tv;
   if (!tv) {
     record.error = "未搜索到剧集信息";
+    record.status = "失败";
+    record.stage = "TMDB搜索";
+    record.progress = 100;
     await appendTaskLog(uuid, "[失败] 未搜索到剧集信息");
     await writeTaskRecord(record);
     return record;
@@ -455,6 +508,9 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
     `${name} (${firstYear})`
   );
   const seasonId = decision.seasonFromName ?? 1;
+  record.stage = "文件映射";
+  record.progress = 60;
+  await writeTaskRecord(record);
   const mapping = await mapTransfers(
     resolvedPath,
     targetRoot,
@@ -465,10 +521,16 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
   );
   if (mapping.size === 0) {
     record.error = "未找到可处理的视频文件";
+    record.status = "失败";
+    record.stage = "文件映射";
+    record.progress = 100;
     await appendTaskLog(uuid, "[失败] 未找到可处理的视频文件");
     await writeTaskRecord(record);
     return record;
   }
+  record.stage = "文件移动";
+  record.progress = 75;
+  await writeTaskRecord(record);
   await executeTransfers(mapping, config.mode);
   record.name = name;
   record.isMovie = false;
@@ -476,6 +538,9 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
   record.seasonId = seasonId;
   record.tmdbId = tv.id;
   record.tmdbType = "tv";
+  record.stage = "记录写入";
+  record.progress = 90;
+  await writeTaskRecord(record);
   await writeTaskRecord(record);
   await fs.writeFile(
     path.join(getRecordsDir(), `${uuid}.json`),
@@ -483,5 +548,9 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
     "utf-8"
   );
   await appendTaskLog(uuid, "[完成] 剧集处理完成");
+  record.status = "完成";
+  record.stage = "完成";
+  record.progress = 100;
+  await writeTaskRecord(record);
   return record;
 };

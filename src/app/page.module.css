@@ -135,7 +135,7 @@
 .tableHead,
 .tableRow {
   display: grid;
-  grid-template-columns: 1fr 2fr 0.5fr 0.6fr 0.6fr 1.2fr;
+  grid-template-columns: 1fr 2fr 0.5fr 0.6fr 0.6fr 1.2fr 1.4fr;
   gap: 12px;
   align-items: center;
 }
@@ -177,6 +177,36 @@
   color: inherit;
   padding: 4px 8px;
   cursor: pointer;
+}
+
+.progressCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progressLabel {
+  font-size: 12px;
+  color: #a6adbb;
+}
+
+.progressBar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: #1f2430;
+  overflow: hidden;
+}
+
+.progressFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #4c7dff;
+}
+
+.progressStage {
+  font-size: 12px;
+  color: #7f8798;
 }
 
 .detailOverlay {
