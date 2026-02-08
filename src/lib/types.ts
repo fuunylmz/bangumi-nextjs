@@ -17,6 +17,8 @@ export type AppConfig = {
   animePath: string;
   animeMoviePath: string;
   mode: RenameMode;
+  authEnabled: boolean;
+  authPassword: string;
   aiEnabled: boolean;
   aiAutoSave: boolean;
   aiProvider: AiProvider;

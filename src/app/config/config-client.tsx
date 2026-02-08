@@ -21,7 +21,7 @@ export default function ConfigClient({ initialConfig }: Props) {
   const defaultDeepseekModel = "deepseek-chat";
 
   const updateField = (key: keyof AppConfig, value: string) => {
-    if (key === "aiEnabled" || key === "aiAutoSave") {
+    if (key === "aiEnabled" || key === "aiAutoSave" || key === "authEnabled") {
       setConfig((prev) => ({ ...prev, [key]: value === "true" }));
       return;
     }
@@ -122,6 +122,26 @@ export default function ConfigClient({ initialConfig }: Props) {
             onChange={(event) =>
               updateField("animeMoviePath", event.target.value)
             }
+          />
+        </div>
+        <h2 className={styles.sectionTitle}>登录配置</h2>
+        <div className={styles.formRow}>
+          <label>启用登录</label>
+          <select
+            value={config.authEnabled ? "true" : "false"}
+            onChange={(event) => updateField("authEnabled", event.target.value)}
+          >
+            <option value="true">启用</option>
+            <option value="false">禁用</option>
+          </select>
+        </div>
+        <div className={styles.formRow}>
+          <label>登录密码</label>
+          <input
+            type="password"
+            value={config.authPassword}
+            placeholder="留空表示不修改"
+            onChange={(event) => updateField("authPassword", event.target.value)}
           />
         </div>
         <div className={styles.formRow}>

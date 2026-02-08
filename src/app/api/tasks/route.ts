@@ -1,14 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendTaskLog, readTaskRecords, writeTaskRecord } from "@/lib/storage";
+import {
+  appendTaskLog,
+  readConfig,
+  readTaskRecords,
+  writeTaskRecord,
+} from "@/lib/storage";
 import { randomUUID } from "node:crypto";
 import { processPath } from "@/lib/rename/process";
+import { authCookieName, validateAuth } from "@/lib/auth";
 
-export const GET = async () => {
+export const GET = async (request: NextRequest) => {
+  const config = await readConfig();
+  if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
   const tasks = await readTaskRecords();
   return NextResponse.json(tasks);
 };
 
 export const POST = async (request: NextRequest) => {
+  const config = await readConfig();
+  if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
   const body = (await request.json()) as {
     path?: string;
     isAnime?: boolean | null;

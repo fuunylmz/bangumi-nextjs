@@ -15,6 +15,8 @@ const defaultConfig: AppConfig = {
   animePath: "",
   animeMoviePath: "",
   mode: "链接",
+  authEnabled: false,
+  authPassword: "",
   aiEnabled: false,
   aiAutoSave: false,
   aiProvider: "openai",
@@ -43,6 +45,8 @@ export const readConfig = async (): Promise<AppConfig> => {
     const raw = await fs.readFile(configPath, "utf-8");
     const parsed = JSON.parse(raw) as Partial<AppConfig>;
     const merged: AppConfig = { ...defaultConfig, ...parsed } as AppConfig;
+    merged.authEnabled = Boolean(merged.authEnabled);
+    merged.authPassword = merged.authPassword || "";
     merged.aiEnabled = Boolean(merged.aiEnabled);
     merged.aiAutoSave = Boolean(merged.aiAutoSave);
     merged.aiTemperature = Number(merged.aiTemperature) || defaultConfig.aiTemperature;

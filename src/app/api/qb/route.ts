@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processPath } from "@/lib/rename/process";
+import { readConfig } from "@/lib/storage";
+import { authCookieName, validateAuth } from "@/lib/auth";
 
 const parseLooseJson = (text: string) => {
   try {
@@ -57,6 +59,10 @@ const normalizeBool = (value?: string | boolean | null) => {
 };
 
 export const POST = async (request: NextRequest) => {
+  const config = await readConfig();
+  if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
   const body = await parseBody(request);
   const path = (body.path ?? "").toString().trim();
   if (!path) {
@@ -73,6 +79,10 @@ export const POST = async (request: NextRequest) => {
 };
 
 export const GET = async (request: NextRequest) => {
+  const config = await readConfig();
+  if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
   const url = new URL(request.url);
   const path = url.searchParams.get("path")?.trim() ?? "";
   if (!path) {

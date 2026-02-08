@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { readConfig } from "@/lib/storage";
+import { authCookieName, validateAuth } from "@/lib/auth";
 
 const listDirs = async (targetPath: string) => {
   const entries = await fs.readdir(targetPath, { withFileTypes: true });
@@ -13,7 +15,11 @@ const listDirs = async (targetPath: string) => {
     .sort((a, b) => a.name.localeCompare(b.name));
 };
 
-export const GET = async (request: Request) => {
+export const GET = async (request: NextRequest) => {
+  const config = await readConfig();
+  if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
   const url = new URL(request.url);
   const rawPath = url.searchParams.get("path");
   const pageParam = Number(url.searchParams.get("page") || "1");

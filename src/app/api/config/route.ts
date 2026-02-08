@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readConfig, writeConfig } from "@/lib/storage";
 import { AppConfig } from "@/lib/types";
+import { authCookieName, validateAuth } from "@/lib/auth";
 
-export const GET = async () => {
+export const GET = async (request: NextRequest) => {
   const config = await readConfig();
-  return NextResponse.json(config);
+  if (!validateAuth(config, request.cookies.get(authCookieName)?.value ?? null)) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+  return NextResponse.json({ ...config, authPassword: "" });
 };
 
 export const POST = async (request: NextRequest) => {
+  const current = await readConfig();
+  if (!validateAuth(current, request.cookies.get(authCookieName)?.value ?? null)) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
   const body = (await request.json()) as AppConfig;
   const config: AppConfig = {
     apiKey: body.apiKey || "",
@@ -16,6 +24,8 @@ export const POST = async (request: NextRequest) => {
     animePath: body.animePath || "",
     animeMoviePath: body.animeMoviePath || "",
     mode: body.mode || "链接",
+    authEnabled: Boolean(body.authEnabled),
+    authPassword: body.authPassword || current.authPassword || "",
     aiEnabled: Boolean(body.aiEnabled),
     aiAutoSave: Boolean(body.aiAutoSave),
     aiProvider: body.aiProvider || "openai",
