@@ -1,0 +1,80 @@
+.page {
+  min-height: 100vh;
+  background: #0f1115;
+  color: #f6f7fb;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 20px;
+  background: #171a21;
+  border-radius: 16px;
+}
+
+.header a {
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #2a2f3a;
+}
+
+.card {
+  background: #171a21;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  margin-top: 12px;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.formRow input,
+.formRow select {
+  border-radius: 10px;
+  border: 1px solid #2d3341;
+  background: #11141b;
+  color: inherit;
+  padding: 8px 10px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.actions button {
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #4c7dff;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding: 20px;
+  }
+
+  .formRow {
+    grid-template-columns: 1fr;
+  }
+}
