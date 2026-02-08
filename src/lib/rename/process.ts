@@ -9,13 +9,15 @@ import {
 } from "../storage";
 import { AppConfig, TaskRecord } from "../types";
 import { isAnimationGenre, searchMovie, searchTv } from "../tmdb";
-import { runAiAnalysis } from "../ai";
+import { runAiAnalysis, runAiTitleAnalysis } from "../ai";
 import {
   extractEpisode,
   extractSeason,
   extractYear,
+  deriveSearchName,
   hasExtraTag,
   hasSeason0Tag,
+  isMeaningfulName,
   isSubtitleFile,
   isVideoFile,
   normalizeName,
@@ -99,6 +101,18 @@ const parseAiItems = (jsonText?: string | null) => {
         extra: Boolean(item.extra),
       }))
       .filter((item) => Number.isFinite(item.season) && Number.isFinite(item.episode));
+  } catch {
+    return null;
+  }
+};
+
+const parseAiTitle = (jsonText?: string | null) => {
+  if (!jsonText) return null;
+  try {
+    const data = JSON.parse(jsonText) as { title?: string } | string;
+    const title = typeof data === "string" ? data : data.title;
+    const normalized = title?.trim();
+    return normalized ? normalized : null;
   } catch {
     return null;
   }
@@ -255,23 +269,19 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
   }
 
   const stats = await fs.stat(resolvedPath);
-  const rawBaseName = normalizeName(path.basename(resolvedPath));
+  const rawName = path.basename(resolvedPath);
+  const rawBaseName = normalizeName(rawName);
   const strippedForSearch = normalizeName(
     rawBaseName.replace(/s\d{1,2}e\d{1,3}/i, "").replace(/\d{1,3}$/i, "")
   );
-  const baseName = strippedForSearch || rawBaseName;
-  const year = extractYear(baseName);
+  const fallbackName = deriveSearchName(rawName);
+  let baseName = isMeaningfulName(strippedForSearch || rawBaseName)
+    ? strippedForSearch || rawBaseName
+    : fallbackName || strippedForSearch || rawBaseName;
+  let year = extractYear(rawBaseName) ?? extractYear(baseName);
   const fileCount = stats.isDirectory()
     ? (await fs.readdir(resolvedPath)).length
     : 1;
-  const decision = await decideType(
-    baseName,
-    year,
-    config.apiKey,
-    options,
-    stats.isFile(),
-    fileCount
-  );
 
   const uuid = randomUUID();
   const record: TaskRecord = {
@@ -281,16 +291,80 @@ export const processPath = async (inputPath: string, options: ProcessOptions) =>
     useAi: config.aiEnabled,
   };
   await appendTaskLog(uuid, `[开始] ${resolvedPath}`);
+  let videoEntries:
+    | Awaited<ReturnType<typeof collectVideoEntries>>
+    | null = null;
+  let videoNames: string[] = [];
+  let folderNames: string[] = [];
+  let titleCollectError = "";
+  if (config.aiEnabled) {
+    try {
+      videoEntries = await collectVideoEntries(resolvedPath);
+      videoNames = videoEntries.map((entry) => entry.rel);
+      folderNames = Array.from(
+        new Set(videoEntries.flatMap((entry) => entry.folders))
+      );
+    } catch (error) {
+      videoEntries = null;
+      titleCollectError = (error as Error).message;
+    }
+  }
+  if (config.aiEnabled) {
+    try {
+      if (titleCollectError) {
+        await appendTaskLog(
+          uuid,
+          `[AI标题] 读取文件失败: ${titleCollectError}`
+        );
+      }
+      const aiTitleRaw = await runAiTitleAnalysis(
+        config,
+        rawName,
+        videoNames,
+        folderNames
+      );
+      if (aiTitleRaw?.raw) {
+        await appendTaskLog(uuid, `[AI标题原始] ${aiTitleRaw.raw}`);
+        if (aiTitleRaw.extractedJson) {
+          await appendTaskLog(uuid, `[AI标题解析] ${aiTitleRaw.extractedJson}`);
+        }
+      } else {
+        await appendTaskLog(uuid, "[AI标题] 未获取到响应");
+      }
+      const aiTitle = parseAiTitle(aiTitleRaw?.extractedJson);
+      if (aiTitle) {
+        baseName = aiTitle;
+        year = extractYear(rawBaseName) ?? extractYear(baseName);
+        await appendTaskLog(uuid, `[AI标题] 采用标题: ${baseName}`);
+      }
+    } catch (error) {
+      await appendTaskLog(
+        uuid,
+        `[AI标题] 请求失败: ${(error as Error).message}`
+      );
+    }
+  }
   await appendTaskLog(uuid, `[搜索] 关键词: ${baseName}`);
+
+  const decision = await decideType(
+    baseName,
+    year,
+    config.apiKey,
+    options,
+    stats.isFile(),
+    fileCount
+  );
   let aiMap: Map<string, AiEpisodeItem> | undefined;
   let aiApplied = 0;
   if (config.aiEnabled) {
     try {
-      const videoEntries = await collectVideoEntries(resolvedPath);
-      const videoNames = videoEntries.map((entry) => entry.rel);
-      const folderNames = Array.from(
-        new Set(videoEntries.flatMap((entry) => entry.folders))
-      );
+      if (!videoEntries) {
+        videoEntries = await collectVideoEntries(resolvedPath);
+        videoNames = videoEntries.map((entry) => entry.rel);
+        folderNames = Array.from(
+          new Set(videoEntries.flatMap((entry) => entry.folders))
+        );
+      }
       const aiRaw = await runAiAnalysis(config, baseName, videoNames, folderNames);
       if (aiRaw?.raw) {
         await appendTaskLog(uuid, `[AI原始] ${aiRaw.raw}`);

@@ -70,6 +70,59 @@ const season0Tags = [
 
 const tagPattern = /(\[[^\]]+])|(\([^)]+\))|(\{[^}]+})/g;
 const resolutionPattern = /\b(480p|720p|1080p|2160p|4k|x264|x265|hevc|aac|flac)\b/gi;
+const bracketPatterns = [
+  /[【\[]([^】\]]+)[】\]]/g,
+  /《([^》]+)》/g,
+  /\(([^)]+)\)/g,
+];
+const noiseTokens = new Set([
+  "bdrip",
+  "bd",
+  "rip",
+  "web",
+  "webrip",
+  "bluray",
+  "hevc",
+  "x265",
+  "x264",
+  "h264",
+  "h265",
+  "10bit",
+  "8bit",
+  "flac",
+  "aac",
+  "dts",
+  "truehd",
+  "ac3",
+  "opus",
+  "mkv",
+  "mp4",
+  "ass",
+  "ssa",
+  "srt",
+  "vtt",
+  "sub",
+  "idx",
+  "sup",
+  "smi",
+  "简繁",
+  "繁体",
+  "简体",
+  "字幕",
+  "外挂",
+  "raws",
+  "dbd",
+  "menu",
+  "pv",
+  "ncop",
+  "nced",
+  "oad",
+  "ova",
+  "sp",
+  "special",
+  "movie",
+  "tv",
+]);
 
 export const isVideoFile = (name: string) =>
   videoExtensions.has(name.toLowerCase().slice(name.lastIndexOf(".")));
@@ -90,6 +143,42 @@ export const normalizeName = (name: string) =>
     .replace(/[._]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+const normalizeForMeaning = (value: string) =>
+  normalizeName(value)
+    .replace(/s\d{1,2}/gi, " ")
+    .replace(/season\s*\d+/gi, " ")
+    .replace(/第[一二三四五六七八九十0-9]+\s*季/gi, " ")
+    .replace(/第[一二三四五六七八九十0-9]+\s*期/gi, " ")
+    .replace(/第[一二三四五六七八九十0-9]+\s*部/gi, " ")
+    .replace(/oad|ova|sp|special/gi, " ")
+    .replace(/\b\d+\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+export const isMeaningfulName = (value: string) => {
+  const cleaned = normalizeForMeaning(value);
+  if (!cleaned) return false;
+  if (!/[a-z\u4e00-\u9fa5]/i.test(cleaned)) return false;
+  const tokens = cleaned.toLowerCase().split(" ").filter(Boolean);
+  return tokens.some((token) => !noiseTokens.has(token));
+};
+
+export const deriveSearchName = (rawName: string) => {
+  const base = normalizeName(rawName);
+  if (isMeaningfulName(base)) return base;
+  const candidates: string[] = [];
+  for (const pattern of bracketPatterns) {
+    for (const match of rawName.matchAll(pattern)) {
+      if (match[1]) candidates.push(match[1]);
+    }
+  }
+  for (const candidate of candidates) {
+    const normalized = normalizeName(candidate);
+    if (isMeaningfulName(normalized)) return normalized;
+  }
+  return base;
+};
 
 export const extractYear = (name: string) => {
   const match = name.match(/\b(19\d{2}|20\d{2})\b/);

@@ -38,6 +38,37 @@ const buildPrompt = (
     .join("\n");
 };
 
+const buildTitlePrompt = (
+  title: string,
+  files: string[],
+  folders: string[]
+) => {
+  const sample = files.slice(0, 60);
+  const more = files.length > sample.length ? `...还有${files.length - sample.length}个` : "";
+  const folderSample = folders.slice(0, 60);
+  const folderMore =
+    folders.length > folderSample.length
+      ? `...还有${folders.length - folderSample.length}个`
+      : "";
+  return [
+    "你是一个媒体标题解析助手。",
+    `原始名称: ${title}`,
+    "目录列表:",
+    folderSample.map((name) => `- ${name}`).join("\n"),
+    folderMore,
+    "文件列表:",
+    sample.map((name) => `- ${name}`).join("\n"),
+    more,
+    "请输出JSON，格式如下：",
+    "{",
+    '  "title": "作品标题"',
+    "}",
+    "要求：title 仅保留作品名称，去除分辨率、编码、字幕组、季/集信息、年份、格式、特典标记。",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
 const tryExtractJsonBlock = (raw: string) => {
   const fenceMatch = raw.match(/```json\s*([\s\S]*?)```/i);
   if (fenceMatch && fenceMatch[1]) {
@@ -146,5 +177,22 @@ export const runAiAnalysis = async (
   }
   if (!config.geminiApiKey) return null;
   const raw = await requestGemini(config, buildPrompt(title, files, folders));
+  return { raw, extractedJson: extractFromGeminiPayload(raw) };
+};
+
+export const runAiTitleAnalysis = async (
+  config: AppConfig,
+  title: string,
+  files: string[],
+  folders: string[]
+): Promise<AiRawResult | null> => {
+  if (!config.aiEnabled) return null;
+  if (config.aiProvider === "openai") {
+    if (!config.aiApiKey) return null;
+    const raw = await requestOpenAI(config, buildTitlePrompt(title, files, folders));
+    return { raw, extractedJson: extractFromOpenAIResponse(raw) };
+  }
+  if (!config.geminiApiKey) return null;
+  const raw = await requestGemini(config, buildTitlePrompt(title, files, folders));
   return { raw, extractedJson: extractFromGeminiPayload(raw) };
 };
