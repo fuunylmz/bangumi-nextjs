@@ -1,5 +1,5 @@
 # Bangumi Next.js 自动重命名
-
+MADE BY GPT5-CODEX 
 面向番剧/电视剧/电影整理的自动重命名工具，支持 TMDB 搜索与详情展示、字幕同名、qBittorrent 回调触发、LLM 标题解析等能力。
 
 ## 功能概览
