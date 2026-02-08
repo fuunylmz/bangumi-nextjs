@@ -175,7 +175,7 @@ const mapTransfers = async (
     const episodeLabel = padNumber(episode);
     const ext = path.extname(fileName);
     const folder = extra
-      ? path.join(targetRoot, "extra")
+      ? path.join(targetRoot, "Season0")
       : path.join(targetRoot, `Season${finalSeason}`);
     const targetBase = path.join(folder, `S${seasonLabel}E${episodeLabel}`);
     mapping.set(file, `${targetBase}${ext}`);

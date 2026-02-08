@@ -12,8 +12,10 @@ const parseBody = async (request: NextRequest) => {
     };
   } catch {
     const params = new URLSearchParams(text);
+    const rawPath = params.get("path") ?? undefined;
+    const fallback = rawPath ?? text.trim();
     return {
-      path: params.get("path") ?? undefined,
+      path: fallback || undefined,
       isAnime: params.get("isAnime") ?? undefined,
       isMovie: params.get("isMovie") ?? undefined,
     };
@@ -31,7 +33,7 @@ const normalizeBool = (value?: string | boolean | null) => {
 
 export const POST = async (request: NextRequest) => {
   const body = await parseBody(request);
-  const path = body.path?.trim() ?? "";
+  const path = (body.path ?? "").toString().trim();
   if (!path) {
     return NextResponse.json({ error: "路径不能为空" }, { status: 400 });
   }
