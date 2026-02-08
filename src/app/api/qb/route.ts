@@ -1,25 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processPath } from "@/lib/rename/process";
 
+const parseLooseJson = (text: string) => {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+};
+
+const extractJsonPayload = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const direct = parseLooseJson(trimmed);
+  if (direct && typeof direct === "object") return direct;
+  if (typeof direct === "string") {
+    const nested = parseLooseJson(direct);
+    if (nested && typeof nested === "object") return nested;
+  }
+  if (trimmed.includes('\\"')) {
+    const unescaped = trimmed.replace(/\\"/g, '"');
+    const unescapedJson = parseLooseJson(unescaped);
+    if (unescapedJson && typeof unescapedJson === "object") return unescapedJson;
+  }
+  return null;
+};
+
 const parseBody = async (request: NextRequest) => {
   const text = await request.text();
   if (!text) return {};
-  try {
-    return JSON.parse(text) as {
+  const jsonPayload = extractJsonPayload(text);
+  if (jsonPayload && typeof jsonPayload === "object") {
+    return jsonPayload as {
       path?: string;
       isAnime?: boolean | null | string;
       isMovie?: boolean | null | string;
     };
-  } catch {
-    const params = new URLSearchParams(text);
-    const rawPath = params.get("path") ?? undefined;
-    const fallback = rawPath ?? text.trim();
-    return {
-      path: fallback || undefined,
-      isAnime: params.get("isAnime") ?? undefined,
-      isMovie: params.get("isMovie") ?? undefined,
-    };
   }
+  const params = new URLSearchParams(text);
+  const rawPath = params.get("path") ?? undefined;
+  const fallback = rawPath ?? text.trim();
+  return {
+    path: fallback || undefined,
+    isAnime: params.get("isAnime") ?? undefined,
+    isMovie: params.get("isMovie") ?? undefined,
+  };
 };
 
 const normalizeBool = (value?: string | boolean | null) => {
