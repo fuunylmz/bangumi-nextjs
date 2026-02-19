@@ -107,6 +107,35 @@ const buildTmdbPickPrompt = (
     .join("\n");
 };
 
+const buildAnimePickPrompt = (payload: {
+  rawName: string;
+  title: string;
+  year: number | null;
+  type: "tv" | "movie";
+  tmdbTitle?: string;
+  originalTitle?: string;
+  genres?: string;
+}) => {
+  return [
+    "你是一个媒体分类助手。",
+    `原始名称: ${payload.rawName}`,
+    `标题: ${payload.title}`,
+    payload.year ? `年份: ${payload.year}` : "",
+    `类型: ${payload.type === "tv" ? "剧集" : "电影"}`,
+    payload.tmdbTitle ? `TMDB 标题: ${payload.tmdbTitle}` : "",
+    payload.originalTitle ? `原始标题: ${payload.originalTitle}` : "",
+    payload.genres ? `TMDB 类型: ${payload.genres}` : "",
+    "请判断它是否为动画（包括日本动画/动画电影/动画剧集）。",
+    "只输出JSON，格式如下：",
+    "{",
+    '  "isAnime": true',
+    "}",
+    "要求：只输出JSON。",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
 const tryExtractJsonBlock = (raw: string) => {
   const fenceMatch = raw.match(/```json\s*([\s\S]*?)```/i);
   if (fenceMatch && fenceMatch[1]) {
@@ -246,6 +275,30 @@ export const runAiTmdbPick = async (
   if (!config.aiEnabled) return null;
   if (candidates.length === 0) return null;
   const prompt = buildTmdbPickPrompt(title, rawName, year, type, candidates);
+  if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
+    if (!config.aiApiKey) return null;
+    const raw = await requestOpenAI(config, prompt);
+    return { raw, extractedJson: extractFromOpenAIResponse(raw) };
+  }
+  if (!config.geminiApiKey) return null;
+  const raw = await requestGemini(config, prompt);
+  return { raw, extractedJson: extractFromGeminiPayload(raw) };
+};
+
+export const runAiAnimePick = async (
+  config: AppConfig,
+  payload: {
+    rawName: string;
+    title: string;
+    year: number | null;
+    type: "tv" | "movie";
+    tmdbTitle?: string;
+    originalTitle?: string;
+    genres?: string;
+  }
+): Promise<AiRawResult | null> => {
+  if (!config.aiEnabled) return null;
+  const prompt = buildAnimePickPrompt(payload);
   if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
     if (!config.aiApiKey) return null;
     const raw = await requestOpenAI(config, prompt);

@@ -15,7 +15,12 @@ import {
   searchTvCandidates,
   TmdbItem,
 } from "../tmdb";
-import { runAiAnalysis, runAiTitleAnalysis, runAiTmdbPick } from "../ai";
+import {
+  runAiAnalysis,
+  runAiAnimePick,
+  runAiTitleAnalysis,
+  runAiTmdbPick,
+} from "../ai";
 import {
   extractEpisode,
   extractSeason,
@@ -86,16 +91,64 @@ const resolveIsAnime = async (
   config: AppConfig,
   options: ProcessOptions,
   type: "tv" | "movie",
-  item: TmdbItem
+  item: TmdbItem,
+  context: {
+    rawName: string;
+    title: string;
+    year: number | null;
+    uuid?: string;
+  }
 ) => {
   if (options.isAnime === true) return true;
   if (options.isAnime === false) return false;
   const baseIds = resolveGenreIds(item);
   if (isAnimationGenre(baseIds)) return true;
-  if (Array.isArray(baseIds) && baseIds.length > 0) return false;
   const detail = await fetchDetail(type, item.id, config.apiKey);
   const detailIds = resolveGenreIds(detail);
-  return isAnimationGenre(detailIds);
+  if (isAnimationGenre(detailIds)) return true;
+  if (config.aiEnabled) {
+    try {
+      const genresText = Array.isArray(detail?.genres)
+        ? detail.genres
+            .map((genre: { name?: string }) => genre?.name)
+            .filter((name: string | undefined): name is string => Boolean(name))
+            .join(" / ")
+        : "";
+      const tmdbTitle = detail?.title || detail?.name || item.title || item.name;
+      const originalTitle = detail?.original_title || detail?.original_name;
+      const aiRaw = await runAiAnimePick(config, {
+        rawName: context.rawName,
+        title: context.title,
+        year: context.year,
+        type,
+        tmdbTitle,
+        originalTitle,
+        genres: genresText || undefined,
+      });
+      if (context.uuid) {
+        if (aiRaw?.raw) {
+          await appendTaskLog(context.uuid, `[AI动画原始] ${aiRaw.raw}`);
+          if (aiRaw.extractedJson) {
+            await appendTaskLog(context.uuid, `[AI动画解析] ${aiRaw.extractedJson}`);
+          }
+        } else {
+          await appendTaskLog(context.uuid, "[AI动画] 未获取到响应");
+        }
+      }
+      const aiPick = parseAiAnimePick(aiRaw?.extractedJson);
+      if (aiPick !== null) return aiPick;
+    } catch (error) {
+      if (context.uuid) {
+        await appendTaskLog(
+          context.uuid,
+          `[AI动画] 请求失败: ${(error as Error).message}`
+        );
+      }
+    }
+  }
+  if (Array.isArray(detailIds) && detailIds.length > 0) return false;
+  if (Array.isArray(baseIds) && baseIds.length > 0) return false;
+  return false;
 };
 
 const collectVideoEntries = async (basePath: string) => {
@@ -158,6 +211,18 @@ const parseAiTmdbPick = (jsonText?: string | null) => {
     const value = typeof data === "number" ? data : data.id;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const parseAiAnimePick = (jsonText?: string | null) => {
+  if (!jsonText) return null;
+  try {
+    const data = JSON.parse(jsonText) as { isAnime?: boolean } | boolean;
+    if (typeof data === "boolean") return data;
+    if (typeof data.isAnime === "boolean") return data.isAnime;
+    return null;
   } catch {
     return null;
   }
@@ -593,7 +658,12 @@ export const processPath = async (
       ? movie.release_date.split("-")[0]
       : year?.toString() ?? "0000";
     const name = movie.title || baseName;
-    const isAnime = await resolveIsAnime(config, options, "movie", movie);
+    const isAnime = await resolveIsAnime(config, options, "movie", movie, {
+      rawName,
+      title: baseName,
+      year,
+      uuid,
+    });
     const targetRoot = path.join(
       isAnime ? config.animeMoviePath : config.moviePath,
       `${name} (${releaseYear})`
@@ -656,7 +726,12 @@ export const processPath = async (
     ? tv.first_air_date.split("-")[0]
     : year?.toString() ?? "0000";
   const name = tv.name || baseName;
-  const isAnime = await resolveIsAnime(config, options, "tv", tv);
+  const isAnime = await resolveIsAnime(config, options, "tv", tv, {
+    rawName,
+    title: baseName,
+    year,
+    uuid,
+  });
   const targetRoot = path.join(
     isAnime ? config.animePath : config.bangumiPath,
     `${name} (${firstYear})`
