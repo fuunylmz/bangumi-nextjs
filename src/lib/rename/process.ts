@@ -9,6 +9,7 @@ import {
 } from "../storage";
 import { AppConfig, TaskRecord } from "../types";
 import {
+  fetchDetail,
   isAnimationGenre,
   searchMovieCandidates,
   searchTvCandidates,
@@ -68,6 +69,33 @@ const listFiles = async (dir: string) => {
     }
   }
   return files;
+};
+
+const resolveGenreIds = (data?: { genre_ids?: number[]; genres?: { id?: number }[] }) => {
+  if (!data) return undefined;
+  if (Array.isArray(data.genre_ids)) return data.genre_ids;
+  if (Array.isArray(data.genres)) {
+    return data.genres
+      .map((genre) => genre?.id)
+      .filter((id): id is number => Number.isFinite(id));
+  }
+  return undefined;
+};
+
+const resolveIsAnime = async (
+  config: AppConfig,
+  options: ProcessOptions,
+  type: "tv" | "movie",
+  item: TmdbItem
+) => {
+  if (options.isAnime === true) return true;
+  if (options.isAnime === false) return false;
+  const baseIds = resolveGenreIds(item);
+  if (isAnimationGenre(baseIds)) return true;
+  if (Array.isArray(baseIds) && baseIds.length > 0) return false;
+  const detail = await fetchDetail(type, item.id, config.apiKey);
+  const detailIds = resolveGenreIds(detail);
+  return isAnimationGenre(detailIds);
 };
 
 const collectVideoEntries = async (basePath: string) => {
@@ -565,7 +593,7 @@ export const processPath = async (
       ? movie.release_date.split("-")[0]
       : year?.toString() ?? "0000";
     const name = movie.title || baseName;
-    const isAnime = isAnimationGenre(movie.genre_ids);
+    const isAnime = await resolveIsAnime(config, options, "movie", movie);
     const targetRoot = path.join(
       isAnime ? config.animeMoviePath : config.moviePath,
       `${name} (${releaseYear})`
@@ -628,7 +656,7 @@ export const processPath = async (
     ? tv.first_air_date.split("-")[0]
     : year?.toString() ?? "0000";
   const name = tv.name || baseName;
-  const isAnime = isAnimationGenre(tv.genre_ids);
+  const isAnime = await resolveIsAnime(config, options, "tv", tv);
   const targetRoot = path.join(
     isAnime ? config.animePath : config.bangumiPath,
     `${name} (${firstYear})`
