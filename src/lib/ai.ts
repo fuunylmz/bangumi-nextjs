@@ -79,6 +79,7 @@ const buildTitlePrompt = (
 
 const buildTmdbPickPrompt = (
   query: string,
+  rawName: string,
   year: number | null,
   type: "tv" | "movie",
   candidates: TmdbCandidate[]
@@ -90,6 +91,7 @@ const buildTmdbPickPrompt = (
   });
   return [
     "你是一个 TMDB 匹配助手。",
+    `原始名称: ${rawName}`,
     `搜索关键词: ${query}`,
     year ? `年份: ${year}` : "",
     `类型: ${type === "tv" ? "剧集" : "电影"}`,
@@ -237,12 +239,13 @@ export const runAiTmdbPick = async (
   config: AppConfig,
   type: "tv" | "movie",
   title: string,
+  rawName: string,
   year: number | null,
   candidates: TmdbCandidate[]
 ): Promise<AiRawResult | null> => {
   if (!config.aiEnabled) return null;
   if (candidates.length === 0) return null;
-  const prompt = buildTmdbPickPrompt(title, year, type, candidates);
+  const prompt = buildTmdbPickPrompt(title, rawName, year, type, candidates);
   if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
     if (!config.aiApiKey) return null;
     const raw = await requestOpenAI(config, prompt);

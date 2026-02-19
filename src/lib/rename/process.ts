@@ -135,6 +135,29 @@ const parseAiTmdbPick = (jsonText?: string | null) => {
   }
 };
 
+const getCandidateYear = (item: TmdbItem) => {
+  const date = item.release_date || item.first_air_date;
+  if (!date) return null;
+  const yearText = date.split("-")[0];
+  const yearNum = Number(yearText);
+  return Number.isFinite(yearNum) ? yearNum : null;
+};
+
+const scoreCandidate = (item: TmdbItem, query: string, year: number | null) => {
+  const title = normalizeName(item.title || item.name || "").toLowerCase();
+  const normalizedQuery = normalizeName(query).toLowerCase();
+  const titleTokens = title.split(" ").filter(Boolean);
+  const queryTokens = normalizedQuery.split(" ").filter(Boolean);
+  const intersection = queryTokens.filter((token) => titleTokens.includes(token));
+  let score = 0;
+  if (normalizedQuery && title.includes(normalizedQuery)) score += 2;
+  score += intersection.length / Math.max(queryTokens.length, 1);
+  const candidateYear = getCandidateYear(item);
+  if (year && candidateYear === year) score += 2;
+  if (year && candidateYear && candidateYear !== year) score -= 1;
+  return score;
+};
+
 const mapTransfers = async (
   basePath: string,
   targetRoot: string,
@@ -411,6 +434,7 @@ export const processPath = async (
         config,
         type,
         baseName,
+        rawName,
         year,
         candidates
       );
@@ -423,9 +447,24 @@ export const processPath = async (
         await appendTaskLog(uuid, "[AI匹配] 未获取到响应");
       }
       const pickedId = parseAiTmdbPick(aiRaw?.extractedJson);
+      const best = candidates
+        .map((item) => ({ item, score: scoreCandidate(item, baseName, year) }))
+        .sort((a, b) => b.score - a.score)[0]?.item;
       if (pickedId) {
         const picked = candidates.find((item) => item.id === pickedId);
         if (picked) {
+          const pickedScore = scoreCandidate(picked, baseName, year);
+          const bestScore = best ? scoreCandidate(best, baseName, year) : pickedScore;
+          const yearMismatch =
+            year && getCandidateYear(picked) && getCandidateYear(picked) !== year;
+          if (best && (yearMismatch || pickedScore + 0.5 < bestScore)) {
+            const bestTitle = best.title || best.name || "-";
+            await appendTaskLog(
+              uuid,
+              `[AI匹配] 覆盖为更高匹配: ${bestTitle} (${best.id})`
+            );
+            return best;
+          }
           const title = picked.title || picked.name || "-";
           await appendTaskLog(
             uuid,
@@ -437,7 +476,10 @@ export const processPath = async (
     } catch (error) {
       await appendTaskLog(uuid, `[AI匹配] 请求失败: ${(error as Error).message}`);
     }
-    return candidates[0];
+    const fallback = candidates
+      .map((item) => ({ item, score: scoreCandidate(item, baseName, year) }))
+      .sort((a, b) => b.score - a.score)[0]?.item;
+    return fallback ?? candidates[0];
   };
   const tvPicked = await selectCandidate("tv", tvCandidates);
   const moviePicked = await selectCandidate("movie", movieCandidates);
