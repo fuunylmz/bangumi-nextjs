@@ -426,7 +426,22 @@ export const processPath = async (
     candidates: TmdbItem[]
   ) => {
     if (!candidates.length) return null;
+    const candidateList = candidates
+      .map((item) => {
+        const title = item.title || item.name || "-";
+        const date = item.release_date || item.first_air_date || "-";
+        return `- id:${item.id} | ${title} | ${date}`;
+      })
+      .join("\n");
+    await appendTaskLog(
+      uuid,
+      `[AI匹配] 候选列表(${type === "tv" ? "剧集" : "电影"}):\n${candidateList}`
+    );
     if (!config.aiEnabled || !config.aiTmdbSelect || candidates.length <= 1) {
+      await appendTaskLog(
+        uuid,
+        `[AI匹配] 未启用或候选不足，使用第一个候选`
+      );
       return candidates[0];
     }
     try {
