@@ -20,6 +20,7 @@ const defaultConfig: AppConfig = {
   qbToken: "",
   aiEnabled: false,
   aiAutoSave: false,
+  aiTmdbSelect: false,
   aiProvider: "openai",
   aiConfidenceThreshold: "Medium",
   openaiOutputFormat: "function_calling",
@@ -51,6 +52,7 @@ export const readConfig = async (): Promise<AppConfig> => {
     merged.qbToken = merged.qbToken || "";
     merged.aiEnabled = Boolean(merged.aiEnabled);
     merged.aiAutoSave = Boolean(merged.aiAutoSave);
+    merged.aiTmdbSelect = Boolean(merged.aiTmdbSelect);
     merged.aiTemperature = Number(merged.aiTemperature) || defaultConfig.aiTemperature;
     merged.geminiTemperature =
       Number(merged.geminiTemperature) || defaultConfig.geminiTemperature;

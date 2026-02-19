@@ -21,7 +21,12 @@ export default function ConfigClient({ initialConfig }: Props) {
   const defaultDeepseekModel = "deepseek-chat";
 
   const updateField = (key: keyof AppConfig, value: string) => {
-    if (key === "aiEnabled" || key === "aiAutoSave" || key === "authEnabled") {
+    if (
+      key === "aiEnabled" ||
+      key === "aiAutoSave" ||
+      key === "aiTmdbSelect" ||
+      key === "authEnabled"
+    ) {
       setConfig((prev) => ({ ...prev, [key]: value === "true" }));
       return;
     }
@@ -182,6 +187,16 @@ export default function ConfigClient({ initialConfig }: Props) {
           <select
             value={config.aiAutoSave ? "true" : "false"}
             onChange={(event) => updateField("aiAutoSave", event.target.value)}
+          >
+            <option value="true">启用</option>
+            <option value="false">禁用</option>
+          </select>
+        </div>
+        <div className={styles.formRow}>
+          <label>TMDB 由 AI 选择</label>
+          <select
+            value={config.aiTmdbSelect ? "true" : "false"}
+            onChange={(event) => updateField("aiTmdbSelect", event.target.value)}
           >
             <option value="true">启用</option>
             <option value="false">禁用</option>

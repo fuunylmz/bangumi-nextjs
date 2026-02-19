@@ -29,6 +29,7 @@ export const POST = async (request: NextRequest) => {
     qbToken: body.qbToken || current.qbToken || "",
     aiEnabled: Boolean(body.aiEnabled),
     aiAutoSave: Boolean(body.aiAutoSave),
+    aiTmdbSelect: Boolean(body.aiTmdbSelect),
     aiProvider: body.aiProvider || "openai",
     aiConfidenceThreshold: body.aiConfidenceThreshold || "Medium",
     openaiOutputFormat: body.openaiOutputFormat || "function_calling",

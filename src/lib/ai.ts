@@ -5,6 +5,14 @@ type AiRawResult = {
   extractedJson?: string | null;
 };
 
+type TmdbCandidate = {
+  id: number;
+  name?: string;
+  title?: string;
+  first_air_date?: string;
+  release_date?: string;
+};
+
 const buildPrompt = (
   title: string,
   files: string[],
@@ -64,6 +72,34 @@ const buildTitlePrompt = (
     '  "title": "作品标题"',
     "}",
     "要求：title 仅保留作品名称，去除分辨率、编码、字幕组、季/集信息、年份、格式、特典标记。",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
+const buildTmdbPickPrompt = (
+  query: string,
+  year: number | null,
+  type: "tv" | "movie",
+  candidates: TmdbCandidate[]
+) => {
+  const list = candidates.map((item) => {
+    const title = item.title || item.name || "-";
+    const date = item.release_date || item.first_air_date || "-";
+    return `- id:${item.id} | ${title} | ${date}`;
+  });
+  return [
+    "你是一个 TMDB 匹配助手。",
+    `搜索关键词: ${query}`,
+    year ? `年份: ${year}` : "",
+    `类型: ${type === "tv" ? "剧集" : "电影"}`,
+    "候选列表:",
+    list.join("\n"),
+    "只输出JSON，格式如下：",
+    "{",
+    '  "id": 123',
+    "}",
+    "要求：id 必须来自候选列表，只输出JSON。",
   ]
     .filter(Boolean)
     .join("\n");
@@ -194,5 +230,25 @@ export const runAiTitleAnalysis = async (
   }
   if (!config.geminiApiKey) return null;
   const raw = await requestGemini(config, buildTitlePrompt(title, files, folders));
+  return { raw, extractedJson: extractFromGeminiPayload(raw) };
+};
+
+export const runAiTmdbPick = async (
+  config: AppConfig,
+  type: "tv" | "movie",
+  title: string,
+  year: number | null,
+  candidates: TmdbCandidate[]
+): Promise<AiRawResult | null> => {
+  if (!config.aiEnabled) return null;
+  if (candidates.length === 0) return null;
+  const prompt = buildTmdbPickPrompt(title, year, type, candidates);
+  if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
+    if (!config.aiApiKey) return null;
+    const raw = await requestOpenAI(config, prompt);
+    return { raw, extractedJson: extractFromOpenAIResponse(raw) };
+  }
+  if (!config.geminiApiKey) return null;
+  const raw = await requestGemini(config, prompt);
   return { raw, extractedJson: extractFromGeminiPayload(raw) };
 };

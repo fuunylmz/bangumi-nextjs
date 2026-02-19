@@ -22,6 +22,7 @@ export type AppConfig = {
   qbToken: string;
   aiEnabled: boolean;
   aiAutoSave: boolean;
+  aiTmdbSelect: boolean;
   aiProvider: AiProvider;
   aiConfidenceThreshold: AiConfidence;
   openaiOutputFormat: OpenAIOutputFormat;

@@ -1,4 +1,4 @@
-type TmdbItem = {
+export type TmdbItem = {
   id: number;
   name?: string;
   title?: string;
@@ -41,29 +41,52 @@ const fetchTmdb = async (url: string, apiKey: string) => {
   return (await response.json()) as TmdbSearchResult;
 };
 
-export const searchTv = async (
+const searchCandidates = async (
+  type: "tv" | "movie",
   query: string,
   year: number | null,
   apiKey: string
 ) => {
   const languages = ["zh-CN", "ja-JP", "en-US"];
+  const yearKey = type === "tv" ? "first_air_date_year" : "year";
   for (const language of languages) {
     const baseParams = buildParams(apiKey);
     baseParams.set("query", query);
     baseParams.set("include_adult", "false");
     baseParams.set("language", language);
-    if (year) baseParams.set("first_air_date_year", String(year));
-    const url = `https://api.themoviedb.org/3/search/tv?${baseParams.toString()}`;
+    if (year) baseParams.set(yearKey, String(year));
+    const url = `https://api.themoviedb.org/3/search/${type}?${baseParams.toString()}`;
     const data = await fetchTmdb(url, apiKey);
-    if (data?.results?.[0]) return data.results[0];
+    if (data?.results?.length) return data.results;
     if (year) {
-      baseParams.delete("first_air_date_year");
-      const retryUrl = `https://api.themoviedb.org/3/search/tv?${baseParams.toString()}`;
+      baseParams.delete(yearKey);
+      const retryUrl = `https://api.themoviedb.org/3/search/${type}?${baseParams.toString()}`;
       const retryData = await fetchTmdb(retryUrl, apiKey);
-      if (retryData?.results?.[0]) return retryData.results[0];
+      if (retryData?.results?.length) return retryData.results;
     }
   }
-  return null;
+  return [];
+};
+
+export const searchTvCandidates = async (
+  query: string,
+  year: number | null,
+  apiKey: string
+) => searchCandidates("tv", query, year, apiKey);
+
+export const searchMovieCandidates = async (
+  query: string,
+  year: number | null,
+  apiKey: string
+) => searchCandidates("movie", query, year, apiKey);
+
+export const searchTv = async (
+  query: string,
+  year: number | null,
+  apiKey: string
+) => {
+  const results = await searchTvCandidates(query, year, apiKey);
+  return results[0] ?? null;
 };
 
 export const searchMovie = async (
@@ -71,24 +94,8 @@ export const searchMovie = async (
   year: number | null,
   apiKey: string
 ) => {
-  const languages = ["zh-CN", "ja-JP", "en-US"];
-  for (const language of languages) {
-    const baseParams = buildParams(apiKey);
-    baseParams.set("query", query);
-    baseParams.set("include_adult", "false");
-    baseParams.set("language", language);
-    if (year) baseParams.set("year", String(year));
-    const url = `https://api.themoviedb.org/3/search/movie?${baseParams.toString()}`;
-    const data = await fetchTmdb(url, apiKey);
-    if (data?.results?.[0]) return data.results[0];
-    if (year) {
-      baseParams.delete("year");
-      const retryUrl = `https://api.themoviedb.org/3/search/movie?${baseParams.toString()}`;
-      const retryData = await fetchTmdb(retryUrl, apiKey);
-      if (retryData?.results?.[0]) return retryData.results[0];
-    }
-  }
-  return null;
+  const results = await searchMovieCandidates(query, year, apiKey);
+  return results[0] ?? null;
 };
 
 export const fetchDetail = async (

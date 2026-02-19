@@ -8,8 +8,13 @@ import {
   writeTaskRecord,
 } from "../storage";
 import { AppConfig, TaskRecord } from "../types";
-import { isAnimationGenre, searchMovie, searchTv } from "../tmdb";
-import { runAiAnalysis, runAiTitleAnalysis } from "../ai";
+import {
+  isAnimationGenre,
+  searchMovieCandidates,
+  searchTvCandidates,
+  TmdbItem,
+} from "../tmdb";
+import { runAiAnalysis, runAiTitleAnalysis, runAiTmdbPick } from "../ai";
 import {
   extractEpisode,
   extractSeason,
@@ -113,6 +118,18 @@ const parseAiTitle = (jsonText?: string | null) => {
     const title = typeof data === "string" ? data : data.title;
     const normalized = title?.trim();
     return normalized ? normalized : null;
+  } catch {
+    return null;
+  }
+};
+
+const parseAiTmdbPick = (jsonText?: string | null) => {
+  if (!jsonText) return null;
+  try {
+    const data = JSON.parse(jsonText) as { id?: number } | number;
+    const value = typeof data === "number" ? data : data.id;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -222,16 +239,14 @@ const executeTransfers = async (
   }
 };
 
-const decideType = async (
+const decideType = (
   baseName: string,
-  year: number | null,
-  apiKey: string,
   options: ProcessOptions,
   pathIsFile: boolean,
-  fileCount: number
+  fileCount: number,
+  tv: TmdbItem | null,
+  movie: TmdbItem | null
 ) => {
-  const tv = await searchTv(baseName, year, apiKey);
-  const movie = await searchMovie(baseName, year, apiKey);
   const seasonFromName = extractSeason(baseName);
 
   let score = 0;
@@ -377,13 +392,62 @@ export const processPath = async (
   record.progress = 25;
   await writeTaskRecord(record);
 
-  const decision = await decideType(
+  const tvCandidates = await searchTvCandidates(baseName, year, config.apiKey);
+  const movieCandidates = await searchMovieCandidates(
     baseName,
     year,
-    config.apiKey,
+    config.apiKey
+  );
+  const selectCandidate = async (
+    type: "tv" | "movie",
+    candidates: TmdbItem[]
+  ) => {
+    if (!candidates.length) return null;
+    if (!config.aiEnabled || !config.aiTmdbSelect || candidates.length <= 1) {
+      return candidates[0];
+    }
+    try {
+      const aiRaw = await runAiTmdbPick(
+        config,
+        type,
+        baseName,
+        year,
+        candidates
+      );
+      if (aiRaw?.raw) {
+        await appendTaskLog(uuid, `[AI匹配原始] ${aiRaw.raw}`);
+        if (aiRaw.extractedJson) {
+          await appendTaskLog(uuid, `[AI匹配解析] ${aiRaw.extractedJson}`);
+        }
+      } else {
+        await appendTaskLog(uuid, "[AI匹配] 未获取到响应");
+      }
+      const pickedId = parseAiTmdbPick(aiRaw?.extractedJson);
+      if (pickedId) {
+        const picked = candidates.find((item) => item.id === pickedId);
+        if (picked) {
+          const title = picked.title || picked.name || "-";
+          await appendTaskLog(
+            uuid,
+            `[AI匹配] 选择${type === "tv" ? "剧集" : "电影"}: ${title} (${pickedId})`
+          );
+          return picked;
+        }
+      }
+    } catch (error) {
+      await appendTaskLog(uuid, `[AI匹配] 请求失败: ${(error as Error).message}`);
+    }
+    return candidates[0];
+  };
+  const tvPicked = await selectCandidate("tv", tvCandidates);
+  const moviePicked = await selectCandidate("movie", movieCandidates);
+  const decision = decideType(
+    baseName,
     options,
     stats.isFile(),
-    fileCount
+    fileCount,
+    tvPicked,
+    moviePicked
   );
   let aiMap: Map<string, AiEpisodeItem> | undefined;
   let aiApplied = 0;
