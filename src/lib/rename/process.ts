@@ -266,11 +266,16 @@ const decideType = (
   baseName: string,
   options: ProcessOptions,
   pathIsFile: boolean,
-  fileCount: number,
+  videoCount: number,
   tv: TmdbItem | null,
   movie: TmdbItem | null
 ) => {
   const seasonFromName = extractSeason(baseName);
+  const hasSeasonHint = Boolean(seasonFromName);
+
+  if (movie && tv && !hasSeasonHint && videoCount <= 2) {
+    return { kind: "movie" as const, tv, movie, seasonFromName };
+  }
 
   let score = 0;
   if (tv) score += 1;
@@ -278,7 +283,7 @@ const decideType = (
   if (seasonFromName) score += 0.6;
   else score -= 0.6;
   score += pathIsFile ? -0.5 : 0.5;
-  score += fileCount > 6 ? 0.4 : -0.4;
+  score += videoCount > 6 ? 0.4 : -0.4;
 
   if (options.isMovie === false) score += 1;
   if (options.isMovie === true) score -= 1;
@@ -351,8 +356,10 @@ export const processPath = async (
     ? strippedForSearch || rawBaseName
     : fallbackName || strippedForSearch || rawBaseName;
   let year = extractYear(rawBaseName) ?? extractYear(baseName);
-  const fileCount = stats.isDirectory()
-    ? (await fs.readdir(resolvedPath)).length
+  const videoCount = stats.isDirectory()
+    ? (await listFiles(resolvedPath)).filter((file) =>
+        isVideoFile(path.basename(file))
+      ).length
     : 1;
   let videoEntries:
     | Awaited<ReturnType<typeof collectVideoEntries>>
@@ -468,11 +475,9 @@ export const processPath = async (
       if (pickedId) {
         const picked = candidates.find((item) => item.id === pickedId);
         if (picked) {
-          const pickedScore = scoreCandidate(picked, baseName, year);
-          const bestScore = best ? scoreCandidate(best, baseName, year) : pickedScore;
           const yearMismatch =
             year && getCandidateYear(picked) && getCandidateYear(picked) !== year;
-          if (best && (yearMismatch || pickedScore + 0.5 < bestScore)) {
+          if (best && yearMismatch) {
             const bestTitle = best.title || best.name || "-";
             await appendTaskLog(
               uuid,
@@ -502,7 +507,7 @@ export const processPath = async (
     baseName,
     options,
     stats.isFile(),
-    fileCount,
+    videoCount,
     tvPicked,
     moviePicked
   );
