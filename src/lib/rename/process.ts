@@ -376,7 +376,7 @@ export const processPath = async (
       }
       const aiTitle = parseAiTitle(aiTitleRaw?.extractedJson);
       if (aiTitle) {
-        baseName = aiTitle;
+        baseName = normalizeName(aiTitle);
         year = extractYear(rawBaseName) ?? extractYear(baseName);
         await appendTaskLog(uuid, `[AI标题] 采用标题: ${baseName}`);
       }
