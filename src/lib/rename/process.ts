@@ -698,7 +698,6 @@ export const processPath = async (
     record.stage = "记录写入";
     record.progress = 85;
     await writeTaskRecord(record);
-    await writeTaskRecord(record);
     await fs.writeFile(
       path.join(getRecordsDir(), `${uuid}.json`),
       JSON.stringify(Object.fromEntries(mapping), null, 2),
@@ -769,7 +768,6 @@ export const processPath = async (
   record.tmdbType = "tv";
   record.stage = "记录写入";
   record.progress = 90;
-  await writeTaskRecord(record);
   await writeTaskRecord(record);
   await fs.writeFile(
     path.join(getRecordsDir(), `${uuid}.json`),

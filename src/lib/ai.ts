@@ -1,4 +1,4 @@
-import { AppConfig } from "./types";
+import { AiProvider, AppConfig } from "./types";
 
 type AiRawResult = {
   raw: string;
@@ -13,13 +13,18 @@ type TmdbCandidate = {
   release_date?: string;
 };
 
-const buildPrompt = (
-  title: string,
-  files: string[],
-  folders: string[]
-) => {
+/** 判断是否使用 OpenAI 兼容协议（所有非 Gemini 的 provider 均走此路径） */
+export const isOpenAICompatible = (provider: AiProvider): boolean =>
+  provider !== "gemini";
+
+// ───── Prompt Builders ─────
+
+const buildPrompt = (title: string, files: string[], folders: string[]) => {
   const sample = files.slice(0, 80);
-  const more = files.length > sample.length ? `...还有${files.length - sample.length}个` : "";
+  const more =
+    files.length > sample.length
+      ? `...还有${files.length - sample.length}个`
+      : "";
   const folderSample = folders.slice(0, 80);
   const folderMore =
     folders.length > folderSample.length
@@ -52,7 +57,10 @@ const buildTitlePrompt = (
   folders: string[]
 ) => {
   const sample = files.slice(0, 60);
-  const more = files.length > sample.length ? `...还有${files.length - sample.length}个` : "";
+  const more =
+    files.length > sample.length
+      ? `...还有${files.length - sample.length}个`
+      : "";
   const folderSample = folders.slice(0, 60);
   const folderMore =
     folders.length > folderSample.length
@@ -136,19 +144,18 @@ const buildAnimePickPrompt = (payload: {
     .join("\n");
 };
 
+// ───── Response Extractors ─────
+
 const tryExtractJsonBlock = (raw: string) => {
   const fenceMatch = raw.match(/```json\s*([\s\S]*?)```/i);
-  if (fenceMatch && fenceMatch[1]) {
-    return fenceMatch[1].trim();
-  }
+  if (fenceMatch?.[1]) return fenceMatch[1].trim();
+
   const genericFence = raw.match(/```\s*([\s\S]*?)```/);
-  if (genericFence && genericFence[1]) {
-    return genericFence[1].trim();
-  }
+  if (genericFence?.[1]) return genericFence[1].trim();
+
   const objectMatch = raw.match(/\{[\s\S]*\}/);
-  if (objectMatch && objectMatch[0]) {
-    return objectMatch[0].trim();
-  }
+  if (objectMatch?.[0]) return objectMatch[0].trim();
+
   return null;
 };
 
@@ -160,8 +167,7 @@ const extractFromGeminiPayload = (raw: string) => {
       }>;
     };
     const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return null;
-    return tryExtractJsonBlock(text);
+    return text ? tryExtractJsonBlock(text) : null;
   } catch {
     return null;
   }
@@ -173,13 +179,15 @@ const extractFromOpenAIResponse = (raw: string) => {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const text = payload?.choices?.[0]?.message?.content;
-    if (!text) return null;
-    return tryExtractJsonBlock(text);
+    return text ? tryExtractJsonBlock(text) : null;
   } catch {
     return null;
   }
 };
 
+// ───── API Request Functions ─────
+
+/** 通用 OpenAI 兼容协议请求（适用于 OpenAI、DeepSeek 及任何兼容端点） */
 const requestOpenAI = async (config: AppConfig, prompt: string) => {
   const baseUrl = config.aiBaseUrl.replace(/\/$/, "");
   const url = `${baseUrl}/chat/completions`;
@@ -200,7 +208,9 @@ const requestOpenAI = async (config: AppConfig, prompt: string) => {
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`OpenAI请求失败: ${text}`);
+    throw new Error(
+      `OpenAI 兼容 API 请求失败 (${response.status}): ${text.slice(0, 500)}`
+    );
   }
   return text;
 };
@@ -212,23 +222,40 @@ const requestGemini = async (config: AppConfig, prompt: string) => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: config.geminiTemperature,
-      },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: config.geminiTemperature },
     }),
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Gemini请求失败: ${text}`);
+    throw new Error(
+      `Gemini 请求失败 (${response.status}): ${text.slice(0, 500)}`
+    );
   }
   return text;
 };
+
+// ───── Unified AI Dispatcher ─────
+
+/**
+ * 统一的 AI 调用入口。
+ * 所有非 Gemini 的 provider（openai / deepseek / custom）均走 OpenAI 兼容协议。
+ */
+const callAi = async (
+  config: AppConfig,
+  prompt: string
+): Promise<AiRawResult | null> => {
+  if (isOpenAICompatible(config.aiProvider)) {
+    if (!config.aiApiKey) return null;
+    const raw = await requestOpenAI(config, prompt);
+    return { raw, extractedJson: extractFromOpenAIResponse(raw) };
+  }
+  if (!config.geminiApiKey) return null;
+  const raw = await requestGemini(config, prompt);
+  return { raw, extractedJson: extractFromGeminiPayload(raw) };
+};
+
+// ───── Public API ─────
 
 export const runAiAnalysis = async (
   config: AppConfig,
@@ -237,14 +264,7 @@ export const runAiAnalysis = async (
   folders: string[]
 ): Promise<AiRawResult | null> => {
   if (!config.aiEnabled) return null;
-  if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
-    if (!config.aiApiKey) return null;
-    const raw = await requestOpenAI(config, buildPrompt(title, files, folders));
-    return { raw, extractedJson: extractFromOpenAIResponse(raw) };
-  }
-  if (!config.geminiApiKey) return null;
-  const raw = await requestGemini(config, buildPrompt(title, files, folders));
-  return { raw, extractedJson: extractFromGeminiPayload(raw) };
+  return callAi(config, buildPrompt(title, files, folders));
 };
 
 export const runAiTitleAnalysis = async (
@@ -254,14 +274,7 @@ export const runAiTitleAnalysis = async (
   folders: string[]
 ): Promise<AiRawResult | null> => {
   if (!config.aiEnabled) return null;
-  if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
-    if (!config.aiApiKey) return null;
-    const raw = await requestOpenAI(config, buildTitlePrompt(title, files, folders));
-    return { raw, extractedJson: extractFromOpenAIResponse(raw) };
-  }
-  if (!config.geminiApiKey) return null;
-  const raw = await requestGemini(config, buildTitlePrompt(title, files, folders));
-  return { raw, extractedJson: extractFromGeminiPayload(raw) };
+  return callAi(config, buildTitlePrompt(title, files, folders));
 };
 
 export const runAiTmdbPick = async (
@@ -274,15 +287,10 @@ export const runAiTmdbPick = async (
 ): Promise<AiRawResult | null> => {
   if (!config.aiEnabled) return null;
   if (candidates.length === 0) return null;
-  const prompt = buildTmdbPickPrompt(title, rawName, year, type, candidates);
-  if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
-    if (!config.aiApiKey) return null;
-    const raw = await requestOpenAI(config, prompt);
-    return { raw, extractedJson: extractFromOpenAIResponse(raw) };
-  }
-  if (!config.geminiApiKey) return null;
-  const raw = await requestGemini(config, prompt);
-  return { raw, extractedJson: extractFromGeminiPayload(raw) };
+  return callAi(
+    config,
+    buildTmdbPickPrompt(title, rawName, year, type, candidates)
+  );
 };
 
 export const runAiAnimePick = async (
@@ -298,13 +306,5 @@ export const runAiAnimePick = async (
   }
 ): Promise<AiRawResult | null> => {
   if (!config.aiEnabled) return null;
-  const prompt = buildAnimePickPrompt(payload);
-  if (config.aiProvider === "openai" || config.aiProvider === "deepseek") {
-    if (!config.aiApiKey) return null;
-    const raw = await requestOpenAI(config, prompt);
-    return { raw, extractedJson: extractFromOpenAIResponse(raw) };
-  }
-  if (!config.geminiApiKey) return null;
-  const raw = await requestGemini(config, prompt);
-  return { raw, extractedJson: extractFromGeminiPayload(raw) };
+  return callAi(config, buildAnimePickPrompt(payload));
 };

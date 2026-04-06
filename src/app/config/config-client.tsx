@@ -13,7 +13,16 @@ export default function ConfigClient({ initialConfig }: Props) {
   const [config, setConfig] = useState<AppConfig>(initialConfig);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const providerLabel = config.aiProvider === "deepseek" ? "DeepSeek" : "OpenAI";
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [geminiModels, setGeminiModels] = useState<string[]>([]);
+  const [geminiModelsLoading, setGeminiModelsLoading] = useState(false);
+  const providerLabel =
+    config.aiProvider === "deepseek"
+      ? "DeepSeek"
+      : config.aiProvider === "custom"
+      ? "API"
+      : "OpenAI";
   const showOpenAIFields = config.aiProvider !== "gemini";
   const openaiBase = "https://api.openai.com/v1";
   const deepseekBase = "https://api.deepseek.com/v1";
@@ -38,7 +47,11 @@ export default function ConfigClient({ initialConfig }: Props) {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
+  const knownBases = [openaiBase, deepseekBase];
+  const knownModels = [defaultOpenaiModel, defaultDeepseekModel];
+
   const updateProvider = (value: AppConfig["aiProvider"]) => {
+    setModels([]);
     setConfig((prev) => {
       const next = { ...prev, aiProvider: value };
       if (value === "deepseek") {
@@ -59,8 +72,79 @@ export default function ConfigClient({ initialConfig }: Props) {
         }
         return next;
       }
+      if (value === "custom") {
+        if (knownBases.includes(prev.aiBaseUrl)) {
+          next.aiBaseUrl = "";
+        }
+        if (knownModels.includes(prev.aiModel)) {
+          next.aiModel = "";
+        }
+        return next;
+      }
       return next;
     });
+  };
+
+  const fetchModels = async () => {
+    if (!config.aiBaseUrl) {
+      setMessage("请先填写 API Base URL");
+      return;
+    }
+    setModelsLoading(true);
+    setMessage("");
+    const params = new URLSearchParams({
+      protocol: "openai",
+      baseUrl: config.aiBaseUrl,
+      apiKey: config.aiApiKey,
+    });
+    const res = await fetch(`/api/ai/models?${params}`, { cache: "no-store" });
+    const data = await res.json();
+    setModelsLoading(false);
+    if (!res.ok) {
+      setMessage(data?.error || "获取模型列表失败");
+      return;
+    }
+    const list: string[] = data.models || [];
+    setModels(list);
+    if (list.length === 0) {
+      setMessage("未获取到可用模型");
+    } else {
+      setMessage(`获取到 ${list.length} 个模型`);
+      if (!config.aiModel || !list.includes(config.aiModel)) {
+        updateField("aiModel", list[0]);
+      }
+    }
+  };
+
+  const fetchGeminiModels = async () => {
+    if (!config.geminiBaseUrl) {
+      setMessage("请先填写 Gemini Base URL");
+      return;
+    }
+    setGeminiModelsLoading(true);
+    setMessage("");
+    const params = new URLSearchParams({
+      protocol: "gemini",
+      baseUrl: config.geminiBaseUrl,
+      apiKey: config.geminiApiKey,
+    });
+    const res = await fetch(`/api/ai/models?${params}`, { cache: "no-store" });
+    const data = await res.json();
+    setGeminiModelsLoading(false);
+    if (!res.ok) {
+      setMessage(data?.error || "获取模型列表失败");
+      return;
+    }
+    const list: string[] = data.models || [];
+    setGeminiModels(list);
+    if (list.length === 0) {
+      setMessage("未获取到可用模型");
+    } else {
+      setMessage(`获取到 ${list.length} 个 Gemini 模型`);
+      if (!config.geminiModel || !list.includes(config.geminiModel)) {
+        updateField("geminiModel", list[0]);
+      }
+    }
   };
 
   const saveConfig = async () => {
@@ -213,6 +297,7 @@ export default function ConfigClient({ initialConfig }: Props) {
             <option value="openai">openai</option>
             <option value="deepseek">deepseek</option>
             <option value="gemini">gemini</option>
+            <option value="custom">自定义 (OpenAI 兼容)</option>
           </select>
         </div>
         <div className={styles.formRow}>
@@ -271,10 +356,44 @@ export default function ConfigClient({ initialConfig }: Props) {
         {showOpenAIFields ? (
           <div className={styles.formRow}>
             <label>{providerLabel} 模型</label>
-            <input
-              value={config.aiModel}
-              onChange={(event) => updateField("aiModel", event.target.value)}
-            />
+            <div className={styles.inputGroup}>
+              {models.length > 0 ? (
+                <select
+                  value={models.includes(config.aiModel) ? config.aiModel : ""}
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      updateField("aiModel", event.target.value);
+                    }
+                  }}
+                >
+                  {!models.includes(config.aiModel) && config.aiModel ? (
+                    <option value="" disabled>
+                      {config.aiModel} (不在列表中)
+                    </option>
+                  ) : null}
+                  {models.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={config.aiModel}
+                  onChange={(event) =>
+                    updateField("aiModel", event.target.value)
+                  }
+                  placeholder="输入模型名称或点击获取"
+                />
+              )}
+              <button
+                type="button"
+                onClick={fetchModels}
+                disabled={modelsLoading}
+              >
+                {modelsLoading ? "获取中..." : "获取模型"}
+              </button>
+            </div>
           </div>
         ) : null}
         {showOpenAIFields ? (
@@ -303,10 +422,49 @@ export default function ConfigClient({ initialConfig }: Props) {
         </div>
         <div className={styles.formRow}>
           <label>Gemini 模型</label>
-          <input
-            value={config.geminiModel}
-            onChange={(event) => updateField("geminiModel", event.target.value)}
-          />
+          <div className={styles.inputGroup}>
+            {geminiModels.length > 0 ? (
+              <select
+                value={
+                  geminiModels.includes(config.geminiModel)
+                    ? config.geminiModel
+                    : ""
+                }
+                onChange={(event) => {
+                  if (event.target.value) {
+                    updateField("geminiModel", event.target.value);
+                  }
+                }}
+              >
+                {!geminiModels.includes(config.geminiModel) &&
+                config.geminiModel ? (
+                  <option value="" disabled>
+                    {config.geminiModel} (不在列表中)
+                  </option>
+                ) : null}
+                {geminiModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={config.geminiModel}
+                onChange={(event) =>
+                  updateField("geminiModel", event.target.value)
+                }
+                placeholder="输入模型名称或点击获取"
+              />
+            )}
+            <button
+              type="button"
+              onClick={fetchGeminiModels}
+              disabled={geminiModelsLoading}
+            >
+              {geminiModelsLoading ? "获取中..." : "获取模型"}
+            </button>
+          </div>
         </div>
         <div className={styles.formRow}>
           <label>Gemini 温度</label>

@@ -54,6 +54,43 @@
   padding: 8px 10px;
 }
 
+.inputGroup {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inputGroup input,
+.inputGroup select {
+  flex: 1;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid #2d3341;
+  background: #11141b;
+  color: inherit;
+  padding: 8px 10px;
+}
+
+.inputGroup button {
+  white-space: nowrap;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #2d3341;
+  background: #2a2f3a;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.inputGroup button:hover {
+  background: #3a4050;
+}
+
+.inputGroup button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .actions {
   display: flex;
   gap: 12px;
