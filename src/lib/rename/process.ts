@@ -296,6 +296,10 @@ const mapTransfers = async (
     }
     const extra = aiItem?.extra ?? hasExtraTag(fileName);
     const season0 = aiItem ? aiItem.season === 0 : hasSeason0Tag(fileName);
+    
+    // 跳过特别编与特典
+    if (extra || season0) continue;
+
     const seasonFromFile =
       extractSeason(fileName) || extractSeason(path.basename(path.dirname(file)));
     const finalSeason = season0
