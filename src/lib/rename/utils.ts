@@ -222,10 +222,20 @@ export const padNumber = (value: number) =>
 
 export const hasExtraTag = (name: string) => {
   const lower = name.toLowerCase();
-  return extraTags.some((tag) => lower.includes(tag));
+  // 特殊修正：提取可能作为独立词的词缀，或直接包含的情况
+  const pattern = new RegExp(`\\b(${extraTags.join("|")})\\b`, "i");
+  if (pattern.test(lower)) return true;
+  // 保留原有 fallback 包含检测，但需要避免类似 1080p 等常见字符串引发的错乱
+  return false; // 其实严格的边界匹配更安全
 };
 
 export const hasSeason0Tag = (name: string) => {
   const lower = name.toLowerCase();
-  return season0Tags.some((tag) => lower.includes(tag));
+  // 使用边界匹配避免 "2000" 误匹配 "00"
+  // 对于 ".5"，\b可能不起效，所以特殊处理
+  const tagsWithoutDot = season0Tags.filter(t => t !== ".5");
+  const pattern = new RegExp(`(?<!\\d)(${tagsWithoutDot.join("|")})(?!\\d)`, "i");
+  if (pattern.test(lower)) return true;
+  if (lower.includes(".5")) return true;
+  return false;
 };
