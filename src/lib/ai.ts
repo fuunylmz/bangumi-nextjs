@@ -25,29 +25,52 @@ const buildPrompt = (title: string, files: string[], folders: string[]) => {
     files.length > sample.length
       ? `...还有${files.length - sample.length}个`
       : "";
-  const folderSample = folders.slice(0, 80);
-  const folderMore =
-    folders.length > folderSample.length
-      ? `...还有${folders.length - folderSample.length}个`
-      : "";
+
+  // 按目录分组文件，展示清晰的目录结构
+  const grouped = new Map<string, string[]>();
+  for (const file of sample) {
+    const dir = file.includes("/") ? file.substring(0, file.lastIndexOf("/")) : ".";
+    if (!grouped.has(dir)) grouped.set(dir, []);
+    grouped.get(dir)!.push(file);
+  }
+  const tree = Array.from(grouped.entries())
+    .map(([dir, dirFiles]) => `[${dir}]\n${dirFiles.map((f) => `  - ${f}`).join("\n")}`)
+    .join("\n");
+
   return [
-    "你是一个媒体文件整理助手。",
+    "你是一个媒体文件整理助手，你需要分析以下文件列表，判断每个视频文件属于正片还是特典/附加内容。",
+    "",
     `标题推测: ${title}`,
-    "目录列表:",
-    folderSample.map((name) => `- ${name}`).join("\n"),
-    folderMore,
-    "文件列表:",
-    sample.map((name) => `- ${name}`).join("\n"),
+    "",
+    "目录结构（按文件夹分组）:",
+    tree,
     more,
+    "",
+    "## 判断规则",
+    "1. **正片**（extra: false）：属于本作品主线剧情的剧集，通常文件名包含 S01E01、EP01 等集数标记，或按顺序编号。",
+    "2. **特典/附加内容**（extra: true）：不属于主线剧情的内容，包括但不限于：",
+    "   - NCOP/NCED（无字幕OP/ED）",
+    "   - PV（预告片）、CM（广告）、Trailer（预告）",
+    "   - SP/Special（特别篇）、OVA/OAD",
+    "   - Menu（菜单）、IV（访谈）",
+    "   - 作品衍生短片、番外篇（例如：Depth of Field、Mini Theater、特典映像等）",
+    "   - 任何放在独立子文件夹中且文件夹名称明显不是季数标记（如 Season1、S2）的内容",
+    "3. **目录名是重要线索**：如果文件在非主目录（非根目录、非Season文件夹）的子文件夹中，且文件夹名称是特定短片/特典系列的名字，应标记为 extra: true。",
+    "4. **拿不准时标记为 extra: true**，宁可漏掉特典也不要把特典混入正片。",
+    "",
     "请输出JSON，格式如下：",
     "{",
     '  "items": [',
     '    {"file": "路径/文件名", "season": 1, "episode": 1, "extra": false}',
     "  ]",
     "}",
-    "要求：file 必须与列表一致，season/episode 为数字，extra 表示特典。",
+    "要求：",
+    "- file 必须与列表中的路径完全一致",
+    "- season/episode 为数字",
+    "- extra 为布尔值，true 表示特典/附加内容，false 表示正片",
+    "- 只输出JSON，不要解释",
   ]
-    .filter(Boolean)
+    .filter((line) => line !== undefined)
     .join("\n");
 };
 

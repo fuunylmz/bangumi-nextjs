@@ -56,6 +56,7 @@ const extraTags = [
   "预告",
   "特典",
   "映像",
+  "depth of field",
 ];
 
 const season0Tags = [
