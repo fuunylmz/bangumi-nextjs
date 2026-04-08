@@ -186,12 +186,58 @@ export const extractYear = (name: string) => {
   return match ? Number(match[1]) : null;
 };
 
+const chineseDigitMap: Record<string, number> = {
+  "零": 0, "〇": 0,
+  "一": 1, "壹": 1,
+  "二": 2, "两": 2, "贰": 2,
+  "三": 3, "叁": 3,
+  "四": 4, "肆": 4,
+  "五": 5, "伍": 5,
+  "六": 6, "陆": 6,
+  "七": 7, "柒": 7,
+  "八": 8, "捌": 8,
+  "九": 9, "玖": 9,
+  "十": 10, "拾": 10,
+};
+
+const chineseToNumber = (str: string): number | null => {
+  // Single digit: 一~九
+  if (str.length === 1 && chineseDigitMap[str] !== undefined) {
+    return chineseDigitMap[str];
+  }
+  // 十X = 10+X, X十 = X*10, X十Y = X*10+Y, 十 = 10
+  const chars = [...str];
+  let result = 0;
+  let current = 0;
+  for (const ch of chars) {
+    const val = chineseDigitMap[ch];
+    if (val === undefined) return null;
+    if (val === 10) {
+      result += (current || 1) * 10;
+      current = 0;
+    } else {
+      current = val;
+    }
+  }
+  result += current;
+  return result > 0 ? result : null;
+};
+
 export const extractSeason = (name: string) => {
   const match =
     name.match(/season\s*([0-9]{1,2})/i) ||
     name.match(/s([0-9]{1,2})/i) ||
     name.match(/第\s*([0-9]{1,2})\s*季/i);
-  return match ? Number(match[1]) : null;
+  if (match) return Number(match[1]);
+
+  // Chinese numeral: 第一季, 第二季, 第十二季, etc.
+  const cnMatch = name.match(/第\s*([一二三四五六七八九十零〇壹贰叁肆伍陆柒捌玖拾两]+)\s*季/);
+  if (cnMatch) {
+    const num = chineseToNumber(cnMatch[1]);
+    if (num !== null) return num;
+  }
+
+  return null;
 };
 
 export const extractEpisode = (name: string) => {

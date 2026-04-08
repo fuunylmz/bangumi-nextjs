@@ -361,13 +361,14 @@ const executeTransfers = async (
 
 const decideType = (
   baseName: string,
+  rawName: string,
   options: ProcessOptions,
   pathIsFile: boolean,
   videoCount: number,
   tv: TmdbItem | null,
   movie: TmdbItem | null
 ) => {
-  const seasonFromName = extractSeason(baseName);
+  const seasonFromName = extractSeason(baseName) ?? extractSeason(rawName);
   const hasSeasonHint = Boolean(seasonFromName);
 
   if (movie && tv && !hasSeasonHint && videoCount <= 2) {
@@ -602,6 +603,7 @@ export const processPath = async (
   const moviePicked = await selectCandidate("movie", movieCandidates);
   const decision = decideType(
     baseName,
+    rawName,
     options,
     stats.isFile(),
     videoCount,
@@ -622,7 +624,7 @@ export const processPath = async (
           new Set(videoEntries.flatMap((entry) => entry.folders))
         );
       }
-      const aiRaw = await runAiAnalysis(config, baseName, videoNames, folderNames);
+      const aiRaw = await runAiAnalysis(config, baseName, rawName, videoNames, folderNames);
       if (aiRaw?.raw) {
         await appendTaskLog(uuid, `[AI原始] ${aiRaw.raw}`);
         if (aiRaw.extractedJson) {

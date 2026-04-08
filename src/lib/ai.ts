@@ -19,7 +19,7 @@ export const isOpenAICompatible = (provider: AiProvider): boolean =>
 
 // ───── Prompt Builders ─────
 
-const buildPrompt = (title: string, files: string[], folders: string[]) => {
+const buildPrompt = (title: string, rawName: string, files: string[], folders: string[]) => {
   const sample = files.slice(0, 80);
   const more =
     files.length > sample.length
@@ -41,6 +41,7 @@ const buildPrompt = (title: string, files: string[], folders: string[]) => {
     "你是一个媒体文件整理助手，你需要分析以下文件列表，判断每个视频文件属于正片还是特典/附加内容。",
     "",
     `标题推测: ${title}`,
+    `原始文件夹名: ${rawName}`,
     "",
     "目录结构（按文件夹分组）:",
     tree,
@@ -57,6 +58,7 @@ const buildPrompt = (title: string, files: string[], folders: string[]) => {
     "   - 任何放在独立子文件夹中且文件夹名称明显不是季数标记（如 Season1、S2）的内容",
     "3. **目录名是重要线索**：如果文件在非主目录（非根目录、非Season文件夹）的子文件夹中，且文件夹名称是特定短片/特典系列的名字，应标记为 extra: true。",
     "4. **拿不准时标记为 extra: true**，宁可漏掉特典也不要把特典混入正片。",
+    "5. **season 字段**：请根据原始文件夹名中的季数信息（如'第二季'、'S2'、'Season2'等）来确定 season 值。如果原始文件夹名包含季数标记，正片的 season 应对应该季数。",
     "",
     "请输出JSON，格式如下：",
     "{",
@@ -283,11 +285,12 @@ const callAi = async (
 export const runAiAnalysis = async (
   config: AppConfig,
   title: string,
+  rawName: string,
   files: string[],
   folders: string[]
 ): Promise<AiRawResult | null> => {
   if (!config.aiEnabled) return null;
-  return callAi(config, buildPrompt(title, files, folders));
+  return callAi(config, buildPrompt(title, rawName, files, folders));
 };
 
 export const runAiTitleAnalysis = async (
